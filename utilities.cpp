@@ -207,3 +207,32 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
         return f1*f2/(length*width);
     }
 }
+
+bool utilities::isInPolygon(const vector<Eigen::Vector2d>& convex_hull,
+                            const Eigen::Vector2d& test_point) {
+  int i, j;
+  bool c = false;
+  for (i = 0, j = convex_hull.size() - 1; (size_t)i < convex_hull.size(); j = i++) {
+    if (((convex_hull[i](1) > test_point(1)) != (convex_hull[j](1) > test_point(1))) &&
+        (test_point(0) < (convex_hull[j](0) - convex_hull[i](0)) * (test_point(1) - convex_hull[i](1)) / (convex_hull[j](1) - convex_hull[i](1)) + convex_hull[i](0)))
+      c = !c;
+  }
+  return c;
+}
+
+void utilities::extent2Polygon(const po_kinematic& x, 
+                               const Eigen::Vector2d& eigenvalues,
+                               const Eigen::Matrix2d& eigenvectors,
+                               const double ratio,
+                               vector<Eigen::Vector2d>& polygon){
+    double width(ratio*eigenvalues(0)), length(ratio*eigenvalues(1));
+    Eigen::Vector2d V_w = eigenvectors.col(0);
+    Eigen::Vector2d V_l = eigenvectors.col(1);
+    Eigen::Vector2d half_w_vec = 0.5*width*V_w.normalized();
+    Eigen::Vector2d half_l_vec = 0.5*length*V_l.normalized();
+    Eigen::Vector2d P(x.p1, x.p2);
+    polygon.push_back(P + half_w_vec + half_l_vec);
+    polygon.push_back(P + half_w_vec - half_l_vec);
+    polygon.push_back(P - half_w_vec - half_l_vec);
+    polygon.push_back(P - half_w_vec + half_l_vec);
+}

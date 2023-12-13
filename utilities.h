@@ -28,4 +28,11 @@ class utilities{
       static double Q_function(const double x);
       static double measurement_likelihood_(const po_kinematic& x, const Eigen::Vector2d& eigenvalues, const Eigen::Matrix2d& eigenvectors, 
                                             const double gate_ratio, const Eigen::Vector2d& M, const double sd_noise);
+      static bool isInPolygon(const vector<Eigen::Vector2d>& convex_hull,
+                              const Eigen::Vector2d& test_point);
+      static void extent2Polygon(const po_kinematic& x, 
+                                 const Eigen::Vector2d& eigenvalues,
+                                 const Eigen::Matrix2d& eigenvectors,
+                                 const double ratio,
+                                 vector<Eigen::Vector2d>& polygon);
 };

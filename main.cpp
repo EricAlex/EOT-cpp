@@ -103,13 +103,20 @@ void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targ
 
 int main(void){
     // parameters for simulations
+    grid_para grid_parameters = {
+        .dim1_min = -200,
+        .dim1_max = 200,
+        .dim2_min = -200,
+        .dim2_max = 200,
+        .grid_res = 0.5
+    };
     eot_param para = {
         .accelerationDeviation = 1,
         .rotationalAccelerationDeviation = 0.01,
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .surveillanceAreaSize = 160000,
-        .measurementVariance = 1,
+        .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
         .meanMeasurements = 8,
         .meanClutter = 10,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
@@ -123,14 +130,7 @@ int main(void){
         .thresholdPruning = 1e-3,
         .numOuterIterations = 2
     };
-    grid_para grid_parameters = {
-        .dim1_min = -200,
-        .dim1_max = 200,
-        .dim2_min = -200,
-        .dim2_max = 200,
-        .grid_res = 1
-    };
-    size_t numSteps = 50;
+    size_t numSteps = 90;
     size_t numTargets = 5;
     double startRadius = 75;
     double startVelocity = 10;
@@ -156,7 +156,7 @@ int main(void){
         for(size_t m=0; m<clutteredMeasurements[s].size(); ++m){
             x.push_back(clutteredMeasurements[s][m](0));
             y.push_back(clutteredMeasurements[s][m](1));
-            size.push_back(4);
+            size.push_back(3);
         }
         // Plot line from given x and y data.
         auto l = matplot::scatter(x, y, size);
@@ -164,22 +164,44 @@ int main(void){
         l->marker_face(true);
         matplot::hold(on);
 
-        if(potential_objects_out.size()>0){
-            x.clear(); y.clear(); size.clear();
-            for(size_t t=0; t<potential_objects_out.size(); ++t){
-                x.push_back(potential_objects_out[t].kinematic.p1);
-                y.push_back(potential_objects_out[t].kinematic.p2);
-                size.push_back(12);
+        for(size_t t=0; t<targetTracks[s].size(); ++t){
+            if(isnan(targetTracks[s][t](0))){
+                continue;
             }
-            auto l_o = matplot::scatter(x, y, size);
-            l_o->marker_face_color("r");
-            l_o->marker_face(true);
+            po_kinematic tmpKine = {targetTracks[s][t](0), targetTracks[s][t](1), targetTracks[s][t](2), targetTracks[s][t](3), 0, 0};
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(targetExtents[s][t]);
+            x.clear(); y.clear();
+            vector<Eigen::Vector2d> tmpPolygon;
+            utilities::extent2Polygon(tmpKine, eigensolver.eigenvalues(), eigensolver.eigenvectors(), 1.0, tmpPolygon);
+            for(size_t v=0; v<tmpPolygon.size(); ++v){
+                x.push_back(tmpPolygon[v](0));
+                y.push_back(tmpPolygon[v](1));
+            }
+            x.push_back(tmpPolygon[0](0));
+            y.push_back(tmpPolygon[0](1));
+            matplot::plot(x, y, "g")->line_width(3);
+        }
+
+        if(potential_objects_out.size()>0){
+            for(size_t t=0; t<potential_objects_out.size(); ++t){
+                x.clear(); y.clear();
+                vector<Eigen::Vector2d> tmpPolygon;
+                utilities::extent2Polygon(potential_objects_out[t].kinematic, potential_objects_out[t].extent.eigenvalues, 
+                                          potential_objects_out[t].extent.eigenvectors, 1.0, tmpPolygon);
+                for(size_t v=0; v<tmpPolygon.size(); ++v){
+                    x.push_back(tmpPolygon[v](0));
+                    y.push_back(tmpPolygon[v](1));
+                }
+                x.push_back(tmpPolygon[0](0));
+                y.push_back(tmpPolygon[0](1));
+                matplot::plot(x, y, "r")->line_width(3);
+            }
         }
         matplot::hold(off);
 
         // Set x-axis and y-axis
-        matplot::xlim({-startRadius, startRadius});
-        matplot::ylim({-startRadius, startRadius});
+        matplot::xlim({-startRadius-10, startRadius+10});
+        matplot::ylim({-startRadius-10, startRadius+10});
         usleep(1e5);
     }
     return 0;

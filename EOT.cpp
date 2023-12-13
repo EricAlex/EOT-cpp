@@ -125,13 +125,46 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     //     it++;
     // }
 
-    
-
-    for(size_t i=0; i<measurements.size(); ++i){
-        ordered_measurements.push_back(measurements[i]);
-        if(i%10 == 0){
-            newIndexes.push_back(i);
+    unordered_set<size_t> remainIndexes, rmedLegacyIndexes;
+    for(size_t m=0; m<measurements.size(); ++m){
+        remainIndexes.insert(m);
+    }
+    double sigmaRatio(2.0);
+    vector< vector<Eigen::Vector2d> > legacyPOPolygons;
+    for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
+        vector<Eigen::Vector2d> tmpPolygon;
+        utilities::extent2Polygon(m_currentPotentialObjects_t_[t].kinematic, m_currentPotentialObjects_t_[t].extent.eigenvalues, 
+                                  m_currentPotentialObjects_t_[t].extent.eigenvectors, sigmaRatio, tmpPolygon);
+        legacyPOPolygons.push_back(tmpPolygon);
+    }
+    if(m_currentPotentialObjects_t_.size()>0){
+        for(size_t m=0; m<measurements.size(); ++m){
+            measurement M = measurements[m];
+            for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
+                double radius = sigmaRatio*sqrt(std::pow(m_currentPotentialObjects_t_[t].extent.eigenvalues(1), 2) + std::pow(m_currentPotentialObjects_t_[t].extent.eigenvalues(0), 2));
+                if((M(0)<(m_currentPotentialObjects_t_[t].kinematic.p1-radius))||(M(0)>(m_currentPotentialObjects_t_[t].kinematic.p1+radius))
+                    ||(M(1)<(m_currentPotentialObjects_t_[t].kinematic.p2-radius))||(M(1)>(m_currentPotentialObjects_t_[t].kinematic.p2+radius))){
+                    continue;
+                }else{
+                    if(utilities::isInPolygon(legacyPOPolygons[t], M)){
+                        remainIndexes.erase(remainIndexes.find(m));
+                        rmedLegacyIndexes.insert(m);
+                        break;
+                    }
+                }
+            }
         }
+    }
+    size_t ordered_idx(0);
+    for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
+        ordered_measurements.push_back(measurements[*it]);
+        if((ordered_idx+1)%2 == 0){
+            newIndexes.push_back(ordered_idx);
+        }
+        ordered_idx++;
+    }
+    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
+        ordered_measurements.push_back(measurements[*it]);
     }
 
     return true;
@@ -322,6 +355,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     double nanValue = nan("");
     double constantFactor = areaSize*(double(m_param_.meanMeasurements)/m_param_.meanClutter);
     double gate_ratio(1.0);
+    double measurementSD = sqrt(m_param_.measurementVariance);
 
     // init measurement grid parameters
     update_grid_map_param(measurements_paras);
@@ -397,7 +431,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                     for(size_t p=0; p<m_param_.numParticles; ++p){
                         likelihood1_t_m_p[t][m][p] = constantFactor * utilities::measurement_likelihood_(m_currentParticlesKinematic_t_p_[t][p], 
                             m_currentParticlesExtent_t_p_[t][p].eigenvalues, m_currentParticlesExtent_t_p_[t][p].eigenvectors, gate_ratio, 
-                            measurements[m], measurements_paras.grid_res);
+                            measurements[m], measurementSD);
                     }
                     inputDA[t](1) = currentExistencesExtrinsic_m_t[m][t] 
                         * (std::accumulate(std::begin(likelihood1_t_m_p[t][m]), std::end(likelihood1_t_m_p[t][m]), 0.0)/likelihood1_t_m_p[t][m].size());
@@ -430,7 +464,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                             weights_p[p] /= temp_sum;
                             likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p] = constantFactor * utilities::measurement_likelihood_(m_currentParticlesKinematic_t_p_[targetIndex][p],
                                 m_currentParticlesExtent_t_p_[targetIndex][p].eigenvalues, m_currentParticlesExtent_t_p_[targetIndex][p].eigenvectors, gate_ratio,
-                                measurements[m], measurements_paras.grid_res);
+                                measurements[m], measurementSD);
                             product_sum += weights_p[p] * likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
                         }
                         tmp_inputDA(1) = currentExistencesExtrinsic_m_t[m][targetIndex] * product_sum;
