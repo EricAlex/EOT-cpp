@@ -11,6 +11,7 @@
 
 #include "globaldef.h"
 #include "utilities.h"
+#include "dbscan.h"
 
 using namespace std;
 using namespace std::chrono;

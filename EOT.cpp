@@ -99,6 +99,10 @@ bool EOT::performPrediction(const double delta_time){
     return true;
 }
 
+double dist_func(const vec2d& t1, const vec2d& t2){
+    return sqrt(std::pow(t1[0]-t2[0], 2) + std::pow(t1[1]-t2[1], 2));
+}
+
 bool EOT::getPromisingNewTargets(const vector<measurement>& measurements, 
                                  vector<size_t>& newIndexes, 
                                  vector<measurement>& ordered_measurements){
@@ -129,7 +133,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(2.0);
+    double sigmaRatio(1.2);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -155,13 +159,23 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
             }
         }
     }
-    size_t ordered_idx(0);
+
+    vector<vec2d> m4Cluster;
     for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
-        ordered_measurements.push_back(measurements[*it]);
-        if((ordered_idx+1)%2 == 0){
-            newIndexes.push_back(ordered_idx);
+        m4Cluster.push_back(vec2d{measurements[*it](0), measurements[*it](1)});
+    }
+    auto dbscan = DBSCAN<vec2d, double>();
+    dbscan.Run(&m4Cluster, 2, m_param_.meanTargetDimension, 2, &dist_func);
+    auto noise = dbscan.Noise;
+    auto clusters = dbscan.Clusters;
+    for(auto& n:noise){
+        ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
+    }
+    for(size_t i=0; i<clusters.size(); i++){
+        for(size_t j=0; j<clusters[i].size(); j++){
+            ordered_measurements.push_back(measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]));
         }
-        ordered_idx++;
+        newIndexes.push_back(ordered_measurements.size()-1);
     }
     for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
         ordered_measurements.push_back(measurements[*it]);
@@ -548,6 +562,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             }
         }
     }
+
+    cout<<"m_currentExistences_t_.size(): "<<m_currentExistences_t_.size()<<endl;
 
     // perform pruning
     for(size_t t=0; t<m_currentExistences_t_.size();){

@@ -6,6 +6,11 @@ using namespace std;
 #define LIDAR_ANGULAR_RESOLUTION	0.0013962634 // in radian
 #define INIT_VAILD_GRID_LABEL	1
 
+enum targetShape{
+	ELLIPSE,
+	RECTANGLE
+};
+
 struct po_kinematic{
 	double p1; // absolute position_1
 	double p2; // absolute position_2
@@ -36,6 +41,11 @@ struct PO{
 
 typedef Eigen::Vector2d measurement;
 
+struct vec2d {
+    double data[2];
+    double operator[](int idx) const { return data[idx]; }
+};
+
 struct grid_para{
 	double dim1_min;
 	double dim1_max;
@@ -57,6 +67,7 @@ struct eot_param{
 	// prior distribution parameters
 	Eigen::Matrix2d priorVelocityCovariance; // default diag(5^2, 5^2)
 	double priorTurningRateDeviation; // default 0.01 rad/s
+	double meanTargetDimension;
 	Eigen::Matrix2d meanPriorExtent; // default 3*I
 	double priorExtentDegreeFreedom; // default 30
 	double degreeFreedomPrediction; // default 2000

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <unistd.h>
+#include <unordered_set>
 
 #include <matplot/matplot.h>
 
@@ -64,10 +65,42 @@ void generateTracksUnknown(const eot_param& parameters,
     }
 }
 
+void generateTargetOutline(const Eigen::Vector4d& tracks, const Eigen::Matrix2d& extent, const size_t numMeasurements, 
+                           const double measurementVariance, vector<Eigen::Vector2d>& measurements){
+    po_kinematic tmpKine = {tracks(0), tracks(1), tracks(2), tracks(3), 0, 0};
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(extent);
+    vector<Eigen::Vector2d> tmpPolygon;
+    utilities::extent2Polygon(tmpKine, eigensolver.eigenvalues(), eigensolver.eigenvectors(), 1.0, tmpPolygon);
+    tmpPolygon.push_back(tmpPolygon[0]);
+    vector< pair<double, double> > range;
+    double rangeSum(0);
+    for(size_t i=0; i<(tmpPolygon.size()-1); ++i){
+        double beforeAdd(rangeSum);
+        Eigen::Vector2d edgeVec = tmpPolygon[i+1] - tmpPolygon[i];
+        rangeSum += edgeVec.norm();
+        range.push_back(make_pair(beforeAdd, rangeSum));
+    }
+    for(size_t m=0; m<numMeasurements; ++m){
+        double rdL = utilities::sampleUniform(0, rangeSum);
+        size_t idx(0);
+        for(size_t i=0; i<range.size(); ++i){
+            if((rdL>=range[i].first)&&(rdL<=range[i].second)){
+                idx = i;
+                break;
+            }
+        }
+        Eigen::Vector2d edgeVec = tmpPolygon[idx+1] - tmpPolygon[idx];
+        Eigen::Vector2d measurementsTmp1 = tmpPolygon[idx] + ((rdL - range[idx].first)/edgeVec.norm()) * edgeVec 
+            + sqrt(measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
+        measurements.push_back(measurementsTmp1);
+    }
+}
+
 void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targetTracks, 
                                    const vector< vector<Eigen::Matrix2d> >& targetExtents,
                                    const eot_param& parameters, 
                                    const grid_para& grid_parameters, 
+                                   targetShape shape,
                                    vector< vector<Eigen::Vector2d> >& clutteredMeasurements){
     if((targetTracks.size()!=targetExtents.size())||(targetTracks.size()<=0)){
         return;
@@ -81,12 +114,16 @@ void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targ
                 if(isnan(targetTracks[s][t](0))){
                     continue;
                 }
-                Eigen::Matrix2d covar = targetExtents[s][t]*targetExtents[s][t];
                 size_t numMeasurementsTmp = utilities::samplePoisson(parameters.meanMeasurements);
-                for(size_t m=0; m<numMeasurementsTmp; ++m){
-                    Eigen::Vector2d measurementsTmp1 = Eigen::Vector2d(targetTracks[s][t](0), targetTracks[s][t](1)) + utilities::sampleMvNormal(Eigen::Vector2d(0.0, 0.0), covar) 
-                    + sqrt(parameters.measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
-                    measurements.push_back(measurementsTmp1);
+                if(shape == targetShape::ELLIPSE){
+                    Eigen::Matrix2d covar = targetExtents[s][t]*targetExtents[s][t];
+                    for(size_t m=0; m<numMeasurementsTmp; ++m){
+                        Eigen::Vector2d measurementsTmp1 = Eigen::Vector2d(targetTracks[s][t](0), targetTracks[s][t](1)) + utilities::sampleMvNormal(Eigen::Vector2d(0.0, 0.0), covar) 
+                        + sqrt(parameters.measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
+                        measurements.push_back(measurementsTmp1);
+                    }
+                }else if(shape == targetShape::RECTANGLE){
+                    generateTargetOutline(targetTracks[s][t], targetExtents[s][t], numMeasurementsTmp, parameters.measurementVariance, measurements);
                 }
             }
             size_t numFalseAlarms = utilities::samplePoisson(parameters.meanClutter);
@@ -110,6 +147,7 @@ int main(void){
         .dim2_max = 200,
         .grid_res = 0.5
     };
+    double meanTargetDimension = 3;
     eot_param para = {
         .accelerationDeviation = 1,
         .rotationalAccelerationDeviation = 0.01,
@@ -121,7 +159,8 @@ int main(void){
         .meanClutter = 10,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         .priorTurningRateDeviation = 0.01,
-        .meanPriorExtent = 3 * Eigen::Matrix2d::Identity(),
+        .meanTargetDimension = meanTargetDimension,
+        .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
         .numParticles = 1000,
@@ -130,7 +169,7 @@ int main(void){
         .thresholdPruning = 1e-3,
         .numOuterIterations = 2
     };
-    size_t numSteps = 90;
+    size_t numSteps = 60;
     size_t numTargets = 5;
     double startRadius = 75;
     double startVelocity = 10;
@@ -144,7 +183,7 @@ int main(void){
     vector< vector<Eigen::Matrix2d> > targetExtents;
     generateTracksUnknown(para, startStates, startMatrixes, appearanceFromTo, numSteps, scanTime, targetTracks, targetExtents);
     vector< vector<Eigen::Vector2d> > clutteredMeasurements;
-    generateClutteredMeasurements(targetTracks, targetExtents, para, grid_parameters, clutteredMeasurements);
+    generateClutteredMeasurements(targetTracks, targetExtents, para, grid_parameters, targetShape::RECTANGLE, clutteredMeasurements);
     EOT sim_eot(para);
     for(size_t s=0; s<numSteps; ++s){
         cout<<"Number of measurements: "<<clutteredMeasurements[s].size()<<endl;
@@ -160,7 +199,7 @@ int main(void){
         }
         // Plot line from given x and y data.
         auto l = matplot::scatter(x, y, size);
-        l->marker_face_color("b");
+        l->marker_color("b");
         l->marker_face(true);
         matplot::hold(on);
 
@@ -197,6 +236,7 @@ int main(void){
                 matplot::plot(x, y, "r")->line_width(3);
             }
         }
+
         matplot::hold(off);
 
         // Set x-axis and y-axis

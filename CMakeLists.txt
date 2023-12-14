@@ -27,6 +27,7 @@ set(project_SOURCES ./main.cpp
 
 set(project_HEADERS ./EOT.h
                     ./utilities.h
+                    ./dbscan.h
                     ./globaldef.h)
  
 add_executable(${PROJECT_NAME} ${project_SOURCES} ${project_HEADERS})
