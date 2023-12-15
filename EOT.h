@@ -8,6 +8,7 @@
 #include <stack>
 #include <set>
 #include <string>
+#include <limits>
 
 #include "globaldef.h"
 #include "utilities.h"

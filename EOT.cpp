@@ -78,7 +78,8 @@ bool EOT::performPrediction(const double delta_time){
                 m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
                 m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
                 m_currentParticlesKinematic_t_p_[t][p].t += delta_time*utilities::sampleGaussian(0, m_param_.rotationalAccelerationDeviation);
-                m_currentParticlesKinematic_t_p_[t][p].s = utilities::mean_number_of_measurements(m_currentParticlesExtent_t_p_[t][p].eigenvalues, m_grid_para_.grid_res);
+                // m_currentParticlesKinematic_t_p_[t][p].s = utilities::mean_number_of_measurements(m_currentParticlesExtent_t_p_[t][p].eigenvalues, m_grid_para_.grid_res);
+                m_currentParticlesKinematic_t_p_[t][p].s = m_param_.meanMeasurements;
             }
         }
         for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
@@ -165,16 +166,34 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         m4Cluster.push_back(vec2d{measurements[*it](0), measurements[*it](1)});
     }
     auto dbscan = DBSCAN<vec2d, double>();
-    dbscan.Run(&m4Cluster, 2, m_param_.meanTargetDimension, 2, &dist_func);
+    dbscan.Run(&m4Cluster, 2, m_param_.meanTargetDimension, 1, &dist_func);
     auto noise = dbscan.Noise;
     auto clusters = dbscan.Clusters;
     for(auto& n:noise){
         ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
     }
     for(size_t i=0; i<clusters.size(); i++){
+        measurement m_centor(0, 0);
         for(size_t j=0; j<clusters[i].size(); j++){
-            ordered_measurements.push_back(measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]));
+            m_centor += measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]);
         }
+        m_centor = m_centor/clusters[i].size();
+        size_t centor_idx(0);
+        double min_dist(numeric_limits<double>::infinity());
+        for(size_t j=0; j<clusters[i].size(); j++){
+            measurement dist_vec = measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]) - m_centor;
+            double dist = dist_vec.norm();
+            if(dist<min_dist){
+                min_dist = dist;
+                centor_idx = j;
+            }
+        }
+        for(size_t j=0; j<clusters[i].size(); j++){
+            if(j!=centor_idx){
+                ordered_measurements.push_back(measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]));
+            }
+        }
+        ordered_measurements.push_back(measurement(m4Cluster[clusters[i][centor_idx]][0], m4Cluster[clusters[i][centor_idx]][1]));
         newIndexes.push_back(ordered_measurements.size()-1);
     }
     for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
@@ -362,7 +381,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                     vector<PO>& potential_objects_out){
     timer_start();
     // init configuration parameters
-    Eigen::Matrix2d totalCovariance = (m_param_.meanPriorExtent.array().square() + m_param_.measurementVariance).matrix();
+    Eigen::Matrix2d totalCovariance = m_param_.meanPriorExtent*m_param_.meanPriorExtent;
+    totalCovariance.array() += m_param_.measurementVariance;
     double areaSize = (measurements_paras.dim1_max-measurements_paras.dim1_min)*(measurements_paras.dim2_max-measurements_paras.dim2_min);
     double uniformWeight = log(1/areaSize);
     Eigen::MatrixXd priorExtentShape = m_param_.meanPriorExtent*(m_param_.priorExtentDegreeFreedom-m_param_.meanPriorExtent.cols()-1);
@@ -404,10 +424,10 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     // initialize belief propagation (BP) message passing
     double init_new_existence = m_param_.meanBirths * exp_minus_meanMeasurements/(m_param_.meanBirths * exp_minus_meanMeasurements +1);
     vector< vector<double> > newWeights_t_p(numNew, vector<double>(m_param_.numParticles));
+    Eigen::Matrix2d proposalCovariance = 2 * totalCovariance;
+    Eigen::Matrix2d proposalCovariance_sqrt = utilities::sqrtm(proposalCovariance);
     for(size_t t=0; t<numNew; ++t){
         Eigen::Vector2d proposalMean = measurements[newIndexes[t]];
-        Eigen::Matrix2d proposalCovariance = 2 * totalCovariance;
-        Eigen::Matrix2d proposalCovariance_sqrt = proposalCovariance.array().sqrt().matrix();
         vector<po_kinematic> kinematic_p;
         vector<po_extent> extent_p;
         for(size_t p=0; p<m_param_.numParticles; ++p){
@@ -432,7 +452,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     vector< vector< vector<double> > > weightsExtrinsic_t_m_p(numLegacy, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
     vector< vector< vector<double> > > weightsExtrinsicNew_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
     vector< vector< vector<double> > > likelihood1_t_m_p(numLegacy, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, 0.0)));
-    vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
+    // vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
+    vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, 0.0)));
 
     for(size_t outer=0; outer<m_param_.numOuterIterations; ++outer){
         // perform one BP message passing iteration for each measurement
@@ -542,6 +563,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                         }
                         weights_m_p[m][p] = log(currentWeights);
                     }
+                    double tmpVal = weights_m_p[m][0];
+                    double tmpVal2 = tmpVal;
                 }
 
                 // calculate extrinsic information for new targets (at all except last iteration) or belief (at last iteration)
@@ -562,8 +585,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             }
         }
     }
-
-    cout<<"m_currentExistences_t_.size(): "<<m_currentExistences_t_.size()<<endl;
 
     // perform pruning
     for(size_t t=0; t<m_currentExistences_t_.size();){

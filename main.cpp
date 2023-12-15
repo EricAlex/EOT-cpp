@@ -80,7 +80,7 @@ void generateTargetOutline(const Eigen::Vector4d& tracks, const Eigen::Matrix2d&
         rangeSum += edgeVec.norm();
         range.push_back(make_pair(beforeAdd, rangeSum));
     }
-    for(size_t m=0; m<numMeasurements; ++m){
+    for(size_t m=0; m<(numMeasurements-1); ++m){
         double rdL = utilities::sampleUniform(0, rangeSum);
         size_t idx(0);
         for(size_t i=0; i<range.size(); ++i){
@@ -94,6 +94,8 @@ void generateTargetOutline(const Eigen::Vector4d& tracks, const Eigen::Matrix2d&
             + sqrt(measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
         measurements.push_back(measurementsTmp1);
     }
+    measurements.push_back(Eigen::Vector2d(tracks(0), tracks(1))
+        + sqrt(measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1)));
 }
 
 void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targetTracks, 
@@ -141,10 +143,10 @@ void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targ
 int main(void){
     // parameters for simulations
     grid_para grid_parameters = {
-        .dim1_min = -200,
-        .dim1_max = 200,
-        .dim2_min = -200,
-        .dim2_max = 200,
+        .dim1_min = -85,
+        .dim1_max = 85,
+        .dim2_min = -85,
+        .dim2_max = 85,
         .grid_res = 0.5
     };
     double meanTargetDimension = 3;
@@ -153,10 +155,9 @@ int main(void){
         .rotationalAccelerationDeviation = 0.01,
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
-        .surveillanceAreaSize = 160000,
         .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
-        .meanMeasurements = 8,
-        .meanClutter = 10,
+        .meanMeasurements = 10,
+        .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         .priorTurningRateDeviation = 0.01,
         .meanTargetDimension = meanTargetDimension,
@@ -189,7 +190,7 @@ int main(void){
         cout<<"Number of measurements: "<<clutteredMeasurements[s].size()<<endl;
         vector<PO> potential_objects_out;
         sim_eot.eot_track(clutteredMeasurements[s], grid_parameters, scanTime, s, potential_objects_out);
-        cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
+        // cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
         // plot result
         vector<double> x, y, size;
         for(size_t m=0; m<clutteredMeasurements[s].size(); ++m){
@@ -223,6 +224,13 @@ int main(void){
 
         if(potential_objects_out.size()>0){
             for(size_t t=0; t<potential_objects_out.size(); ++t){
+                // potential_objects_out[t].kinematic.p1 += scanTime*potential_objects_out[t].kinematic.v1;
+                // potential_objects_out[t].kinematic.p2 += scanTime*potential_objects_out[t].kinematic.v2;
+                // double rot_ang = potential_objects_out[t].kinematic.t * scanTime;
+                // Eigen::Matrix2d rot_mat;
+                // rot_mat << cos(rot_ang), sin(rot_ang),
+                //         -sin(rot_ang), cos(rot_ang);
+                // potential_objects_out[t].extent.eigenvectors = rot_mat * potential_objects_out[t].extent.eigenvectors * rot_mat.transpose();
                 x.clear(); y.clear();
                 vector<Eigen::Vector2d> tmpPolygon;
                 utilities::extent2Polygon(potential_objects_out[t].kinematic, potential_objects_out[t].extent.eigenvalues, 

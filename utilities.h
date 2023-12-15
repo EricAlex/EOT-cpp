@@ -35,4 +35,5 @@ class utilities{
                                  const Eigen::Matrix2d& eigenvectors,
                                  const double ratio,
                                  vector<Eigen::Vector2d>& polygon);
+      static Eigen::MatrixXd sqrtm(const Eigen::MatrixXd& A);
 };

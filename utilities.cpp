@@ -236,3 +236,16 @@ void utilities::extent2Polygon(const po_kinematic& x,
     polygon.push_back(P - half_w_vec - half_l_vec);
     polygon.push_back(P - half_w_vec + half_l_vec);
 }
+
+Eigen::MatrixXd utilities::sqrtm(const Eigen::MatrixXd& A){
+    Eigen::LLT<Eigen::MatrixXd> lltOfA(A); // compute the Cholesky decomposition of A
+    Eigen::MatrixXd L = lltOfA.matrixL(); // retrieve factor L in the decomposition
+
+    // Compute the matrix square root of A using the formula
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(L);
+    Eigen::MatrixXd D = eigensolver.eigenvalues().asDiagonal();
+    Eigen::MatrixXd P = eigensolver.eigenvectors();
+    Eigen::MatrixXd sqrtL = P * D.cwiseSqrt() * P.transpose();
+
+    return sqrtL;
+}

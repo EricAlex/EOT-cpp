@@ -60,7 +60,6 @@ struct eot_param{
 	double rotationalAccelerationDeviation; // angular acceleration deviation
 	double survivalProbability; // default 0.999
 	double meanBirths; // default 0.01
-	double surveillanceAreaSize;
 	double measurementVariance; // default (grid size)^2
 	size_t meanMeasurements;
 	size_t meanClutter;
