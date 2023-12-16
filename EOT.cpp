@@ -58,11 +58,13 @@ bool EOT::performPrediction(const double delta_time){
         for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
             m_currentExistences_t_[t] *= m_param_.survivalProbability;
             for(size_t p=0; p<m_param_.numParticles; ++p){
-                double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
-                Eigen::Matrix2d rot_mat;
-                rot_mat << cos(rot_ang), sin(rot_ang),
-                           -sin(rot_ang), cos(rot_ang);
-                Eigen::MatrixXd S = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose()) / m_param_.degreeFreedomPrediction;
+                // // prediction with rotation
+                // double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
+                // Eigen::Matrix2d rot_mat;
+                // rot_mat << cos(rot_ang), sin(rot_ang),
+                //            -sin(rot_ang), cos(rot_ang);
+                // Eigen::MatrixXd S = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose()) / m_param_.degreeFreedomPrediction;
+                Eigen::MatrixXd S = m_currentParticlesExtent_t_p_[t][p].e / m_param_.degreeFreedomPrediction;
                 m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleWishart(m_param_.degreeFreedomPrediction, S);
                 Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
                 m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
@@ -78,19 +80,22 @@ bool EOT::performPrediction(const double delta_time){
                 m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
                 m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
                 m_currentParticlesKinematic_t_p_[t][p].t += delta_time*utilities::sampleGaussian(0, m_param_.rotationalAccelerationDeviation);
+                // // predict mean number of measurments with shape extention
                 // m_currentParticlesKinematic_t_p_[t][p].s = utilities::mean_number_of_measurements(m_currentParticlesExtent_t_p_[t][p].eigenvalues, m_grid_para_.grid_res);
+                // assign default mean number of measurments
                 m_currentParticlesKinematic_t_p_[t][p].s = m_param_.meanMeasurements;
             }
         }
         for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
             m_currentPotentialObjects_t_[t].kinematic.p1 += delta_time*m_currentPotentialObjects_t_[t].kinematic.v1;
             m_currentPotentialObjects_t_[t].kinematic.p2 += delta_time*m_currentPotentialObjects_t_[t].kinematic.v2;
-            double rot_ang = m_currentPotentialObjects_t_[t].kinematic.t * delta_time;
-            Eigen::Matrix2d rot_mat;
-            rot_mat << cos(rot_ang), sin(rot_ang),
-                       -sin(rot_ang), cos(rot_ang);
-            m_currentPotentialObjects_t_[t].extent.e = rot_mat * m_currentPotentialObjects_t_[t].extent.e * rot_mat.transpose();
-            m_currentPotentialObjects_t_[t].extent.eigenvectors = rot_mat * m_currentPotentialObjects_t_[t].extent.eigenvectors * rot_mat.transpose();
+            // // prediction with rotation
+            // double rot_ang = m_currentPotentialObjects_t_[t].kinematic.t * delta_time;
+            // Eigen::Matrix2d rot_mat;
+            // rot_mat << cos(rot_ang), sin(rot_ang),
+            //            -sin(rot_ang), cos(rot_ang);
+            // m_currentPotentialObjects_t_[t].extent.e = rot_mat * m_currentPotentialObjects_t_[t].extent.e * rot_mat.transpose();
+            // m_currentPotentialObjects_t_[t].extent.eigenvectors = rot_mat * m_currentPotentialObjects_t_[t].extent.eigenvectors * rot_mat.transpose();
         }
     }else{
         m_err_str_ = "[ERROR] performPrediction: legacy target numbers do not match " + to_string(m_currentParticlesKinematic_t_p_.size())
@@ -452,8 +457,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     vector< vector< vector<double> > > weightsExtrinsic_t_m_p(numLegacy, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
     vector< vector< vector<double> > > weightsExtrinsicNew_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
     vector< vector< vector<double> > > likelihood1_t_m_p(numLegacy, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, 0.0)));
-    // vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
-    vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, 0.0)));
+    vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
 
     for(size_t outer=0; outer<m_param_.numOuterIterations; ++outer){
         // perform one BP message passing iteration for each measurement
@@ -551,25 +555,23 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                 for(size_t p=0; p<m_param_.numParticles; ++p){
                     weights_m_p[numMeasurements][p] = newWeights_t_p[targetIndex-numLegacy][p];
                 }
-                for(int m=0; m<t; ++m){
+                for(int m=0; m<=t; ++m){
                     double outputTmpDA = outputDA[m][targetIndexes[m][t]];
                     for(size_t p=0; p<m_param_.numParticles; ++p){
                         double currentWeights = likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
                         if(!isinf(outputTmpDA)){
                             currentWeights *= outputTmpDA;
                         }
-                        if(m != (t-1)){
+                        if(m != t){
                             currentWeights += 1;
                         }
                         weights_m_p[m][p] = log(currentWeights);
                     }
-                    double tmpVal = weights_m_p[m][0];
-                    double tmpVal2 = tmpVal;
                 }
 
                 // calculate extrinsic information for new targets (at all except last iteration) or belief (at last iteration)
                 if(outer != (m_param_.numOuterIterations-1)){
-                    for(int m=0; m<t; ++m){
+                    for(int m=0; m<=t; ++m){
                         getWeightsUnknown(weights_m_p, m_currentExistences_t_[targetIndex], m, 
                             weightsExtrinsicNew_t_m_p[targetIndex-numLegacy][m], currentExistencesExtrinsic_m_t[m][targetIndex]);
                     }
@@ -585,6 +587,13 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             }
         }
     }
+
+    #if DEBUG
+        for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
+            cout<<"\t"<<m_currentExistences_t_[t];
+        }
+        cout<<endl;
+    #endif
 
     // perform pruning
     for(size_t t=0; t<m_currentExistences_t_.size();){

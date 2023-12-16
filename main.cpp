@@ -157,16 +157,16 @@ int main(void){
         .meanBirths = 0.01,
         .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
         .meanMeasurements = 10,
-        .meanClutter = 5,
+        .meanClutter = 2,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         .priorTurningRateDeviation = 0.01,
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
-        .numParticles = 1000,
+        .numParticles = 500,
         .regularizationDeviation = 0,
-        .detectionThreshold = 0.5,
+        .detectionThreshold = 0.1,
         .thresholdPruning = 1e-3,
         .numOuterIterations = 2
     };
@@ -190,7 +190,7 @@ int main(void){
         cout<<"Number of measurements: "<<clutteredMeasurements[s].size()<<endl;
         vector<PO> potential_objects_out;
         sim_eot.eot_track(clutteredMeasurements[s], grid_parameters, scanTime, s, potential_objects_out);
-        // cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
+        cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
         // plot result
         vector<double> x, y, size;
         for(size_t m=0; m<clutteredMeasurements[s].size(); ++m){
@@ -224,13 +224,6 @@ int main(void){
 
         if(potential_objects_out.size()>0){
             for(size_t t=0; t<potential_objects_out.size(); ++t){
-                // potential_objects_out[t].kinematic.p1 += scanTime*potential_objects_out[t].kinematic.v1;
-                // potential_objects_out[t].kinematic.p2 += scanTime*potential_objects_out[t].kinematic.v2;
-                // double rot_ang = potential_objects_out[t].kinematic.t * scanTime;
-                // Eigen::Matrix2d rot_mat;
-                // rot_mat << cos(rot_ang), sin(rot_ang),
-                //         -sin(rot_ang), cos(rot_ang);
-                // potential_objects_out[t].extent.eigenvectors = rot_mat * potential_objects_out[t].extent.eigenvectors * rot_mat.transpose();
                 x.clear(); y.clear();
                 vector<Eigen::Vector2d> tmpPolygon;
                 utilities::extent2Polygon(potential_objects_out[t].kinematic, potential_objects_out[t].extent.eigenvalues, 

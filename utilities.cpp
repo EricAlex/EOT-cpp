@@ -171,11 +171,19 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
                                           const double gate_ratio,
                                           const Eigen::Vector2d& M, 
                                           const double sd_noise){
+    double width(eigenvalues(0)), length(eigenvalues(1));
     double radius(gate_ratio * sqrt(std::pow(eigenvalues(1), 2) + std::pow(eigenvalues(0), 2)));
     if((M(0)<(x.p1-radius))||(M(0)>(x.p1+radius))||(M(1)<(x.p2-radius))||(M(1)>(x.p2+radius))){
-        return 0;
+        // // calculate based on distance
+        // Eigen::Vector2d dist_vec = M - Eigen::Vector2d(x.p1, x.p2);
+        // double dist = dist_vec.norm();
+        // double f = Q_function((dist-0.5*width)/sd_noise) - Q_function((dist+0.5*width)/sd_noise);
+        // return 1e-20*f*f/(length*width);
+
+        // const / dist
+        Eigen::Vector2d dist_vec = M - Eigen::Vector2d(x.p1, x.p2);
+        return 1e-6/dist_vec.norm();
     }else{
-        double width(eigenvalues(0)), length(eigenvalues(1));
         Eigen::Vector2d V_w = eigenvectors.col(0);
         Eigen::Vector2d V_l = eigenvectors.col(1);
         Eigen::Vector2d half_w_vec = 0.5*width*V_w.normalized();
@@ -196,7 +204,7 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
         d1 = p2lDistance(P + half_l_vec + half_w_vec, P + half_l_vec - half_w_vec, M);
         d2 = p2lDistance(P - half_l_vec + half_w_vec, P - half_l_vec - half_w_vec, M);
         Q1 = Q_function(d1/sd_noise);
-        Q2 = Q_function(d2/sd_noise);;
+        Q2 = Q_function(d2/sd_noise);
         if((length>d1)&&(length>d2)){
             f2 = 1.0 - Q1 - Q2;
         }else if((d2>=length)&&(d2>=d1)){

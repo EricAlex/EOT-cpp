@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(eot_cpp)
 
-# set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
+# set(CMAKE_BUILD_TYPE Debug)
 
 include(FetchContent)
 FetchContent_Declare(matplotplusplus
