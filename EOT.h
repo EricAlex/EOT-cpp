@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 #include <limits>
+#include "omp.h"
 
 #include "globaldef.h"
 #include "utilities.h"

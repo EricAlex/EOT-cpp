@@ -143,10 +143,10 @@ void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targ
 int main(void){
     // parameters for simulations
     grid_para grid_parameters = {
-        .dim1_min = -85,
-        .dim1_max = 85,
-        .dim2_min = -85,
-        .dim2_max = 85,
+        .dim1_min = -200,
+        .dim1_max = 200,
+        .dim2_min = -200,
+        .dim2_max = 200,
         .grid_res = 0.5
     };
     double meanTargetDimension = 3;
@@ -157,14 +157,14 @@ int main(void){
         .meanBirths = 0.01,
         .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
         .meanMeasurements = 10,
-        .meanClutter = 2,
+        .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         .priorTurningRateDeviation = 0.01,
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
-        .numParticles = 500,
+        .numParticles = 5000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.1,
         .thresholdPruning = 1e-3,

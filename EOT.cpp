@@ -57,6 +57,7 @@ bool EOT::performPrediction(const double delta_time){
         &&(m_currentParticlesExtent_t_p_.size()==m_currentExistences_t_.size())){
         for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
             m_currentExistences_t_[t] *= m_param_.survivalProbability;
+            #pragma omp parallel for
             for(size_t p=0; p<m_param_.numParticles; ++p){
                 // // prediction with rotation
                 // double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
@@ -70,6 +71,7 @@ bool EOT::performPrediction(const double delta_time){
                 m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
                 m_currentParticlesExtent_t_p_[t][p].eigenvectors = eigensolver.eigenvectors();
             }
+            #pragma omp parallel for
             for(size_t p=0; p<m_param_.numParticles; ++p){
                 double r1 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
                 double r2 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
@@ -139,7 +141,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1.2);
+    double sigmaRatio(1);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -291,6 +293,7 @@ void EOT::resampleSystematic(const vector<double>& weights, vector<size_t>& inde
     vector<double> grid(m_param_.numParticles+1);
     double rd_add = utilities::sampleUniform(0, 1)/double(m_param_.numParticles);
     double step = (1-1/double(m_param_.numParticles))/double(m_param_.numParticles-1);
+    #pragma omp parallel for
     for(size_t p=0; p<m_param_.numParticles; ++p){
         grid[p] = p * step + rd_add;
     }
@@ -353,10 +356,12 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         resampleSystematic(tmpWeights_p, indexes);
         vector<po_kinematic> tmpKinematic_p(m_param_.numParticles);
         vector<po_extent> tmpExtent_p(m_param_.numParticles);
+        #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpKinematic_p[p] = m_currentParticlesKinematic_t_p_[target][p];
             copyStruct(tmpExtent_p[p], m_currentParticlesExtent_t_p_[target][p]);
         }
+        #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
             copyStruct(m_currentParticlesExtent_t_p_[target][p], tmpExtent_p[p]);
@@ -365,6 +370,7 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         }
     }else{
         double nanValue = nan("");
+        #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             m_currentParticlesKinematic_t_p_[target][p].p1 = nanValue;
             m_currentParticlesKinematic_t_p_[target][p].p2 = nanValue;
@@ -393,7 +399,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     Eigen::MatrixXd priorExtentShape = m_param_.meanPriorExtent*(m_param_.priorExtentDegreeFreedom-m_param_.meanPriorExtent.cols()-1);
     double nanValue = nan("");
     double constantFactor = areaSize*(double(m_param_.meanMeasurements)/m_param_.meanClutter);
-    double gate_ratio(1.0);
+    double gate_ratio(2.0);
     double measurementSD = sqrt(m_param_.measurementVariance);
 
     // init measurement grid parameters
@@ -433,21 +439,18 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     Eigen::Matrix2d proposalCovariance_sqrt = utilities::sqrtm(proposalCovariance);
     for(size_t t=0; t<numNew; ++t){
         Eigen::Vector2d proposalMean = measurements[newIndexes[t]];
-        vector<po_kinematic> kinematic_p;
-        vector<po_extent> extent_p;
+        vector<po_kinematic> kinematic_p(m_param_.numParticles);
+        vector<po_extent> extent_p(m_param_.numParticles);
+        #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
-            po_kinematic kinematic;
             Eigen::Vector2d posi = proposalMean + proposalCovariance_sqrt * Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
-            kinematic.p1 = posi(0);
-            kinematic.p2 = posi(1);
-            kinematic_p.push_back(kinematic);
+            kinematic_p[p].p1 = posi(0);
+            kinematic_p[p].p2 = posi(1);
             newWeights_t_p[t][p] = uniformWeight - log(utilities::mvnormPDF(posi, proposalMean, proposalCovariance));
-            po_extent extent;
-            extent.e = utilities::sampleInverseWishart(m_param_.priorExtentDegreeFreedom, priorExtentShape);
-            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(extent.e);
-            extent.eigenvalues = eigensolver.eigenvalues();
-            extent.eigenvectors = eigensolver.eigenvectors();
-            extent_p.push_back(extent);
+            extent_p[p].e = utilities::sampleInverseWishart(m_param_.priorExtentDegreeFreedom, priorExtentShape);
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(extent_p[p].e);
+            extent_p[p].eigenvalues = eigensolver.eigenvalues();
+            extent_p[p].eigenvectors = eigensolver.eigenvectors();
         }
         m_currentParticlesKinematic_t_p_.push_back(kinematic_p);
         m_currentParticlesExtent_t_p_.push_back(extent_p);
@@ -467,6 +470,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             vector< Eigen::Vector2d > inputDA(numLegacy, Eigen::Vector2d(0.0, 0.0));
             for(size_t t=0; t<numLegacy; ++t){
                 if(outer == 0){
+                    #pragma omp parallel for
                     for(size_t p=0; p<m_param_.numParticles; ++p){
                         likelihood1_t_m_p[t][m][p] = constantFactor * utilities::measurement_likelihood_(m_currentParticlesKinematic_t_p_[t][p], 
                             m_currentParticlesExtent_t_p_[t][p].eigenvalues, m_currentParticlesExtent_t_p_[t][p].eigenvectors, gate_ratio, 
@@ -532,12 +536,14 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             vector< vector<double> > weights_m_p(numMeasurements, vector<double>(m_param_.numParticles, 0.0));
             for(int m=0; m<numMeasurements; ++m){
                 double outputTmpDA = outputDA[m][t];
+                #pragma omp parallel for
                 for(size_t p=0; p<m_param_.numParticles; ++p){
                     weights_m_p[m][p] = log(1 + likelihood1_t_m_p[t][m][p]*outputTmpDA);
                 }
             }
             // calculate extrinsic information for legacy targets (at all except last iteration) and belief (at last iteration)
             if(outer != (m_param_.numOuterIterations-1)){
+                #pragma omp parallel for
                 for(int m=0; m<numMeasurements; ++m){
                     getWeightsUnknown(weights_m_p, m_currentExistences_t_[t], m, weightsExtrinsic_t_m_p[t][m], currentExistencesExtrinsic_m_t[m][t]);
                 }
@@ -552,11 +558,13 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             if(newIndexes_map.find(t) != newIndexes_map.end()){
                 targetIndex = targetIndex + 1;
                 vector< vector<double> > weights_m_p(numMeasurements+1, vector<double>(m_param_.numParticles, 0.0));
+                #pragma omp parallel for
                 for(size_t p=0; p<m_param_.numParticles; ++p){
                     weights_m_p[numMeasurements][p] = newWeights_t_p[targetIndex-numLegacy][p];
                 }
                 for(int m=0; m<=t; ++m){
                     double outputTmpDA = outputDA[m][targetIndexes[m][t]];
+                    #pragma omp parallel for
                     for(size_t p=0; p<m_param_.numParticles; ++p){
                         double currentWeights = likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
                         if(!isinf(outputTmpDA)){
@@ -571,12 +579,14 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
 
                 // calculate extrinsic information for new targets (at all except last iteration) or belief (at last iteration)
                 if(outer != (m_param_.numOuterIterations-1)){
+                    #pragma omp parallel for
                     for(int m=0; m<=t; ++m){
                         getWeightsUnknown(weights_m_p, m_currentExistences_t_[targetIndex], m, 
                             weightsExtrinsicNew_t_m_p[targetIndex-numLegacy][m], currentExistencesExtrinsic_m_t[m][targetIndex]);
                     }
                 }else{
                     updateParticles(weights_m_p, targetIndex);
+                    #pragma omp parallel for
                     for(size_t p=0; p<m_param_.numParticles; ++p){
                         Eigen::Vector2d tmpSpeed = utilities::sampleMvNormal(Eigen::Vector2d(0.0, 0.0), m_param_.priorVelocityCovariance);
                         m_currentParticlesKinematic_t_p_[targetIndex][p].v1 = tmpSpeed(0);
