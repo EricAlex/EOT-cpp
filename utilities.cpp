@@ -172,7 +172,7 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
                                           const Eigen::Vector2d& M, 
                                           const double sd_noise){
     double width(eigenvalues(0)), length(eigenvalues(1));
-    double radius(gate_ratio * sqrt(std::pow(eigenvalues(1), 2) + std::pow(eigenvalues(0), 2)));
+    double radius(gate_ratio * sqrt(std::pow(length, 2) + std::pow(width, 2)));
     if((M(0)<(x.p1-radius))||(M(0)>(x.p1+radius))||(M(1)<(x.p2-radius))||(M(1)>(x.p2+radius))){
         // // calculate based on distance
         // Eigen::Vector2d dist_vec = M - Eigen::Vector2d(x.p1, x.p2);
@@ -182,7 +182,7 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
 
         // const / dist
         Eigen::Vector2d dist_vec = M - Eigen::Vector2d(x.p1, x.p2);
-        return 1e-6/dist_vec.norm();
+        return 1e-9/dist_vec.norm();
     }else{
         Eigen::Vector2d V_w = eigenvectors.col(0);
         Eigen::Vector2d V_l = eigenvectors.col(1);

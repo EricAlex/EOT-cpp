@@ -164,10 +164,10 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
-        .numParticles = 5000,
+        .numParticles = 1000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.1,
-        .thresholdPruning = 1e-3,
+        .thresholdPruning = 1e-6,
         .numOuterIterations = 2
     };
     size_t numSteps = 60;

@@ -168,6 +168,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         }
     }
 
+    // clustering using DBSCAN
     vector<vec2d> m4Cluster;
     for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
         m4Cluster.push_back(vec2d{measurements[*it](0), measurements[*it](1)});
@@ -399,7 +400,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     Eigen::MatrixXd priorExtentShape = m_param_.meanPriorExtent*(m_param_.priorExtentDegreeFreedom-m_param_.meanPriorExtent.cols()-1);
     double nanValue = nan("");
     double constantFactor = areaSize*(double(m_param_.meanMeasurements)/m_param_.meanClutter);
-    double gate_ratio(2.0);
+    double gate_ratio(1.0);
     double measurementSD = sqrt(m_param_.measurementVariance);
 
     // init measurement grid parameters
@@ -616,6 +617,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             t++;
         }
     }
+
+    cout<<"After pruning: "<<m_currentExistences_t_.size()<<endl;
 
     // perform estimation
     m_currentPotentialObjects_t_.resize(0);
