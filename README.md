@@ -2,10 +2,12 @@
 
 ## Build from source
 
+```Shell
 git clone https://github.com/EricAlex/EOT-cpp.git
 mkdir build && cd build
 cmake ../EOT-cpp
 make
+```
 
 # References
 
