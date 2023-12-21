@@ -214,23 +214,6 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
         }
         return f1*f2/(length*width);
     }
-
-    // // simple version, may not work well
-    // double width(eigenvalues(0)), length(eigenvalues(1));
-    // double radius = sqrt(width*width + length*length)/2;
-    // Eigen::Vector2d dist_vec = M - Eigen::Vector2d(x.p1, x.p2);
-    // double dist = dist_vec.norm();
-    // if(dist>radius){
-    //     return 1e-6/dist;
-    // }else{
-    //     vector<Eigen::Vector2d> tmpPolygon;
-    //     utilities::extent2Polygon(x, eigenvalues, eigenvectors, 1, tmpPolygon);
-    //     if(isInPolygon(tmpPolygon, M)){
-    //         return 1/(length*width);
-    //     }else{
-    //         return 1e-6/dist;
-    //     }
-    // }
 }
 
 bool utilities::isInPolygon(const vector<Eigen::Vector2d>& convex_hull,

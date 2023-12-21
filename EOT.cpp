@@ -141,7 +141,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1);
+    double sigmaRatio(2);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -168,6 +168,9 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         }
     }
 
+    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
+        ordered_measurements.push_back(measurements[*it]);
+    }
     // clustering using DBSCAN
     vector<vec2d> m4Cluster;
     for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
@@ -177,9 +180,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     dbscan.Run(&m4Cluster, 2, m_param_.meanTargetDimension, 1, &dist_func);
     auto noise = dbscan.Noise;
     auto clusters = dbscan.Clusters;
-    for(auto& n:noise){
-        ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
-    }
     for(size_t i=0; i<clusters.size(); i++){
         measurement m_centor(0, 0);
         for(size_t j=0; j<clusters[i].size(); j++){
@@ -204,8 +204,8 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         ordered_measurements.push_back(measurement(m4Cluster[clusters[i][centor_idx]][0], m4Cluster[clusters[i][centor_idx]][1]));
         newIndexes.push_back(ordered_measurements.size()-1);
     }
-    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
-        ordered_measurements.push_back(measurements[*it]);
+    for(auto& n:noise){
+        ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
     }
 
     return true;
@@ -247,7 +247,7 @@ void EOT::getWeightsUnknown(const vector< vector<double> >& logWeights_m_p,
     int numMeasurements = logWeights_m_p.size();
     vector<double> tmpWeights_p(m_param_.numParticles);
     vector<double> exp_tmpWeights_p(m_param_.numParticles);
-    size_t max_val_idx(0);
+    #pragma omp parallel for
     for(size_t p=0; p<m_param_.numParticles; ++p){
         double tmpSum(0);
         for(int m=0; m<numMeasurements; ++m){
@@ -257,11 +257,14 @@ void EOT::getWeightsUnknown(const vector< vector<double> >& logWeights_m_p,
         }
         tmpWeights_p[p] = tmpSum;
         exp_tmpWeights_p[p] = exp(tmpWeights_p[p]);
+    }
+    size_t max_val_idx(0);
+    for(size_t p=0; p<m_param_.numParticles; ++p){
         if(tmpWeights_p[p] > tmpWeights_p[max_val_idx]){
             max_val_idx = p;
         }
     }
-    double aliveUpdate = std::accumulate(std::begin(exp_tmpWeights_p), std::end(exp_tmpWeights_p), 0.0)/exp_tmpWeights_p.size();
+    double aliveUpdate = std::accumulate(exp_tmpWeights_p.cbegin(), exp_tmpWeights_p.cend(), 0.0)/exp_tmpWeights_p.size();
     if(isinf(aliveUpdate)){
         updatedExistence = 1;
     }else{
@@ -273,11 +276,12 @@ void EOT::getWeightsUnknown(const vector< vector<double> >& logWeights_m_p,
     if(tmpWeights_p.size()>0){
         max_tmpWeights_val = tmpWeights_p[max_val_idx];
     }
-    double tmpSum(0);
+    #pragma omp parallel for
     for(size_t p=0; p<m_param_.numParticles; ++p){
         tmpWeights_p[p] = exp(tmpWeights_p[p] - max_tmpWeights_val);
-        tmpSum += tmpWeights_p[p];
     }
+    double tmpSum = std::accumulate(tmpWeights_p.cbegin(), tmpWeights_p.cend(), 0.0);
+    #pragma omp parallel for
     for(size_t p=0; p<m_param_.numParticles; ++p){
         weights[p] = tmpWeights_p[p]/tmpSum;
     }
@@ -320,7 +324,7 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
     int numMeasurements = logWeights_m_p.size();
     vector<double> tmpWeights_p(m_param_.numParticles);
     vector<double> exp_tmpWeights_p(m_param_.numParticles);
-    size_t max_val_idx(0);
+    #pragma omp parallel for
     for(size_t p=0; p<m_param_.numParticles; ++p){
         double tmpSum(0);
         for(int m=0; m<numMeasurements; ++m){
@@ -328,11 +332,14 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         }
         tmpWeights_p[p] = tmpSum;
         exp_tmpWeights_p[p] = exp(tmpWeights_p[p]);
+    }
+    size_t max_val_idx(0);
+    for(size_t p=0; p<m_param_.numParticles; ++p){
         if(tmpWeights_p[p] > tmpWeights_p[max_val_idx]){
             max_val_idx = p;
         }
     }
-    double aliveUpdate = std::accumulate(std::begin(exp_tmpWeights_p), std::end(exp_tmpWeights_p), 0.0)/exp_tmpWeights_p.size();
+    double aliveUpdate = std::accumulate(exp_tmpWeights_p.cbegin(), exp_tmpWeights_p.cend(), 0.0)/exp_tmpWeights_p.size();
     if(isinf(aliveUpdate)){
         m_currentExistences_t_[target] = 1;
     }else{
@@ -345,11 +352,12 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         if(tmpWeights_p.size()>0){
             max_tmpWeights_val = tmpWeights_p[max_val_idx];
         }
-        double tmpSum(0);
+        #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpWeights_p[p] = exp(tmpWeights_p[p] - max_tmpWeights_val);
-            tmpSum += tmpWeights_p[p];
         }
+        double tmpSum = std::accumulate(tmpWeights_p.cbegin(), tmpWeights_p.cend(), 0.0);
+        #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpWeights_p[p] = tmpWeights_p[p]/tmpSum;
         }
@@ -478,12 +486,14 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                             measurements[m], measurementSD);
                     }
                     inputDA[t](1) = currentExistencesExtrinsic_m_t[m][t] 
-                        * (std::accumulate(std::begin(likelihood1_t_m_p[t][m]), std::end(likelihood1_t_m_p[t][m]), 0.0)/likelihood1_t_m_p[t][m].size());
+                        * (std::accumulate(likelihood1_t_m_p[t][m].cbegin(), likelihood1_t_m_p[t][m].cend(), 0.0)/likelihood1_t_m_p[t][m].size());
                 }else{
-                    double product_sum(0.0);
+                    vector<double> product_p(m_param_.numParticles);
+                    #pragma omp parallel for
                     for(size_t p=0; p<m_param_.numParticles; ++p){
-                        product_sum += weightsExtrinsic_t_m_p[t][m][p] * likelihood1_t_m_p[t][m][p];
+                        product_p[p] = weightsExtrinsic_t_m_p[t][m][p] * likelihood1_t_m_p[t][m][p];
                     }
+                    double product_sum = std::accumulate(product_p.cbegin(), product_p.cend(), 0.0);
                     inputDA[t](1) = currentExistencesExtrinsic_m_t[m][t] * product_sum;
                 }
                 inputDA[t](0) = 1.0;
@@ -498,25 +508,29 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                     Eigen::Vector2d tmp_inputDA;
                     if(outer == 0){
                         vector<double> weights_p(m_param_.numParticles);
-                        double temp_sum(0.0);
+                        #pragma omp parallel for
                         for(size_t p=0; p<m_param_.numParticles; ++p){
                             weights_p[p] = exp(newWeights_t_p[targetIndex-numLegacy][p]);
-                            temp_sum += weights_p[p];
                         }
-                        double product_sum(0.0);
+                        double temp_sum = std::accumulate(weights_p.cbegin(), weights_p.cend(), 0.0);
+                        vector<double> product_p(m_param_.numParticles);
+                        #pragma omp parallel for
                         for(size_t p=0; p<m_param_.numParticles; ++p){
                             weights_p[p] /= temp_sum;
                             likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p] = constantFactor * utilities::measurement_likelihood_(m_currentParticlesKinematic_t_p_[targetIndex][p],
                                 m_currentParticlesExtent_t_p_[targetIndex][p].eigenvalues, m_currentParticlesExtent_t_p_[targetIndex][p].eigenvectors, gate_ratio,
                                 measurements[m], measurementSD);
-                            product_sum += weights_p[p] * likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
+                            product_p[p] = weights_p[p] * likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
                         }
+                        double product_sum = std::accumulate(product_p.cbegin(), product_p.cend(), 0.0);
                         tmp_inputDA(1) = currentExistencesExtrinsic_m_t[m][targetIndex] * product_sum;
                     }else{
-                        double product_sum(0.0);
+                        vector<double> product_p(m_param_.numParticles);
+                        #pragma omp parallel for
                         for(size_t p=0; p<m_param_.numParticles; ++p){
-                            product_sum += weightsExtrinsicNew_t_m_p[targetIndex-numLegacy][m][p] * likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
+                            product_p[p] = weightsExtrinsicNew_t_m_p[targetIndex-numLegacy][m][p] * likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
                         }
+                        double product_sum = std::accumulate(product_p.cbegin(), product_p.cend(), 0.0);
                         tmp_inputDA(1) = currentExistencesExtrinsic_m_t[m][targetIndex] * product_sum;
                     }
                     tmp_inputDA(0) = 1.0;

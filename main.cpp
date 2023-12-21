@@ -156,7 +156,7 @@ int main(void){
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
-        .meanMeasurements = 10,
+        .meanMeasurements = 25,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         .priorTurningRateDeviation = 0.01,
@@ -164,10 +164,10 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
-        .numParticles = 1000,
+        .numParticles = 300,
         .regularizationDeviation = 0,
-        .detectionThreshold = 0.1,
-        .thresholdPruning = 1e-6,
+        .detectionThreshold = 0.5,
+        .thresholdPruning = 1e-3,
         .numOuterIterations = 2
     };
     size_t numSteps = 60;

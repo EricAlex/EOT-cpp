@@ -4,6 +4,7 @@
         "string": "cpp",
         "vector": "cpp",
         "complex": "cpp",
-        "core": "cpp"
+        "core": "cpp",
+        "*.ipp": "cpp"
     }
 }
