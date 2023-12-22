@@ -15,13 +15,14 @@ if(NOT matplotplusplus_POPULATED)
     FetchContent_Populate(matplotplusplus)
     add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
-find_package(Boost COMPONENTS program_options REQUIRED)
-find_package(Eigen3 REQUIRED)
-include_directories(
-    ${Boost_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIRS}
-)
+
+find_package(PCL 1.8 REQUIRED)
+find_package(Boost COMPONENTS program_options REQUIRED )
+include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 set(project_SOURCES ./main.cpp
                     ./EOT.cpp
@@ -33,5 +34,5 @@ set(project_HEADERS ./EOT.h
                     ./globaldef.h)
  
 add_executable(${PROJECT_NAME} ${project_SOURCES} ${project_HEADERS})
- 
-target_link_libraries (${PROJECT_NAME} ${Boost_LIBRARIES} matplot)
+
+target_link_libraries (${PROJECT_NAME} ${PCL_LIBRARIES} ${Boost_LIBRARIES} matplot)

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <unordered_set>
+#include <boost/filesystem.hpp>
 
 #include <matplot/matplot.h>
 
@@ -139,7 +140,7 @@ void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targ
         }
     }
 }
-
+#if SIMULATION
 int main(void){
     // parameters for simulations
     grid_para grid_parameters = {
@@ -248,3 +249,68 @@ int main(void){
     }
     return 0;
 }
+#else
+bool FNcmp(boost::filesystem::path path1, boost::filesystem::path path2){
+    string s1 = path1.stem().string();
+    string s2 = path2.stem().string();
+    double n1 = atoi(s1.c_str());
+    double n2 = atoi(s2.c_str());
+    return n1 < n2;
+}
+vector<boost::filesystem::path> streamFile(string dataPath){
+    vector<boost::filesystem::path> paths(boost::filesystem::directory_iterator{dataPath},
+                                          boost::filesystem::directory_iterator{});
+    string extension = ".bin";
+    vector<boost::filesystem::path> paths_out;
+	for (auto iter=paths.begin(); iter != paths.end(); ++iter){
+        if(iter->extension().string() == extension){
+            paths_out.push_back(iter->string());
+        }
+	}
+    sort(paths_out.begin(), paths_out.end(), FNcmp);
+    return paths_out;
+}
+void loadData(const boost::filesystem::path& pcd_path, 
+              vector<measurement>& Measurements,
+              grid_para& grid_parameters,
+              double& scanTime,
+              uint64_t& frame_idx){
+    ifstream fbinaryin(pcd_path.string().c_str(), ios::in|ios::binary);
+    if(fbinaryin.is_open()){
+        size_t num_M;
+        fbinaryin.read(reinterpret_cast<char*>(&num_M), sizeof(num_M));
+        for(size_t i=0; i<num_M; ++i){
+            measurement tmpM;
+            fbinaryin.read(reinterpret_cast<char*>(&(tmpM(0))), sizeof(tmpM(0)));
+            fbinaryin.read(reinterpret_cast<char*>(&(tmpM(1))), sizeof(tmpM(1)));
+            Measurements.push_back(tmpM);
+        }
+        fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.dim1_min)), sizeof(grid_parameters.dim1_min));
+        fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.dim1_max)), sizeof(grid_parameters.dim1_max));
+        fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.dim2_min)), sizeof(grid_parameters.dim2_min));
+        fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.dim2_max)), sizeof(grid_parameters.dim2_max));
+        fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.grid_res)), sizeof(grid_parameters.grid_res));
+        fbinaryin.read(reinterpret_cast<char*>(&scanTime), sizeof(scanTime));
+        fbinaryin.read(reinterpret_cast<char*>(&frame_idx), sizeof(frame_idx));
+        fbinaryin.close();
+    }else{
+        cout<<"ERROR: can not open file "<<pcd_path.string()<<endl;
+    }
+}
+int main(int argc, char *argv[]){
+    if((argc>2)&&(strlen(argv[1])==2)&&(argv[1][0]=='-')&&(argv[1][1]=='i')){
+        string path(argv[2]);
+        vector<boost::filesystem::path> stream = streamFile(path);
+        for(auto it=stream.begin(); it!=stream.end(); ++it){
+            vector<measurement> Measurements;
+            grid_para grid_parameters;
+            double scanTime;
+            uint64_t frame_idx;
+            loadData(*it, Measurements, grid_parameters, scanTime, frame_idx);
+            cout<<"Measurements.szie(): "<<Measurements.size()<<endl;
+            usleep(1e5);
+        }
+    }
+    return 0;
+}
+#endif
