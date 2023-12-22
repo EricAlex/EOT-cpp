@@ -153,8 +153,8 @@ int main(void){
     eot_param para = {
         .accelerationDeviation = 1,
         .rotationalAccelerationDeviation = 0.01,
-        .survivalProbability = 0.99,
-        .meanBirths = 0.01,
+        .survivalProbability = 0.999,
+        .meanBirths = 0.001,
         .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
         .meanMeasurements = 25,
         .meanClutter = 5,
@@ -185,7 +185,8 @@ int main(void){
     generateTracksUnknown(para, startStates, startMatrixes, appearanceFromTo, numSteps, scanTime, targetTracks, targetExtents);
     vector< vector<Eigen::Vector2d> > clutteredMeasurements;
     generateClutteredMeasurements(targetTracks, targetExtents, para, grid_parameters, targetShape::RECTANGLE, clutteredMeasurements);
-    EOT sim_eot(para);
+    EOT sim_eot;
+    sim_eot.init(para);
     for(size_t s=0; s<numSteps; ++s){
         cout<<"Number of measurements: "<<clutteredMeasurements[s].size()<<endl;
         vector<PO> potential_objects_out;

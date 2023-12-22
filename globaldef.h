@@ -6,7 +6,7 @@ using namespace std;
 #define DEBUG	false
 
 #define LIDAR_ANGULAR_RESOLUTION	0.0013962634 // in radian
-#define INIT_VAILD_GRID_LABEL	1
+#define EOT_INIT_VAILD_GRID_LABEL	1
 
 enum targetShape{
 	ELLIPSE,

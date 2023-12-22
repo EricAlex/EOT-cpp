@@ -1,11 +1,5 @@
 #include "EOT.h"
 
-EOT::EOT(const eot_param& init_parameters) {
-    m_param_ = init_parameters;
-}
-
-EOT::~EOT() {}
-
 void EOT::update_grid_map_param(const grid_para& measurements_paras){
     m_grid_para_ = measurements_paras;
     m_grid_resolution_reciprocal_ = 1 / m_grid_para_.grid_res;
@@ -45,7 +39,7 @@ void EOT::find_neighbors_(const uint32_t index, const uint32_t label, stack<uint
 
 void EOT::update_grid_label_(const uint32_t grid_index, const uint32_t label, stack<uint32_t>& neighbors) {
   if ((m_index_label_map_.find(grid_index) != m_index_label_map_.end())) {
-    if (m_index_label_map_[grid_index] == INIT_VAILD_GRID_LABEL) {
+    if (m_index_label_map_[grid_index] == EOT_INIT_VAILD_GRID_LABEL) {
       neighbors.push(grid_index);
       m_index_label_map_[grid_index] = label;
     }
@@ -116,10 +110,10 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
                                  vector<measurement>& ordered_measurements){
     
     // // grow seed grid
-    // uint32_t label = INIT_VAILD_GRID_LABEL + m_predicted_boxes_in_range_.size();
+    // uint32_t label = EOT_INIT_VAILD_GRID_LABEL + m_predicted_boxes_in_range_.size();
     // auto it = m_index_label_map_.begin();
     // while (it != m_index_label_map_.end()) {
-    //     if (it->second == INIT_VAILD_GRID_LABEL) {
+    //     if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
     //     vector<uint32_t> temp_indices;
     //     ++label;
     //     it->second = label;
@@ -427,7 +421,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_currentExistences_t_[t] = currentAlive/(currentDead+currentAlive);
     }
     size_t numTargets(m_currentParticlesKinematic_t_p_.size());
-    int numLegacy = numTargets;
+    size_t numLegacy = numTargets;
 
     // get indexes of promising new objects
     vector<size_t> newIndexes; // store indexes in reverse order
@@ -498,7 +492,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                 }
                 inputDA[t](0) = 1.0;
             }
-            int targetIndex = numLegacy - 1;
+            int targetIndex = int(numLegacy) - 1;
             unordered_map<size_t, size_t> targetIndexesCurrent;
             // only new targets with index >= measurement index are connected to measurement
             for(int t=(numMeasurements-1); t>=m; --t){
@@ -547,9 +541,9 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         }
 
         // perform update step for legacy targets
-        for(int t=0; t<numLegacy; ++t){
+        for(size_t t=0; t<numLegacy; ++t){
             vector< vector<double> > weights_m_p(numMeasurements, vector<double>(m_param_.numParticles, 0.0));
-            for(int m=0; m<numMeasurements; ++m){
+            for(size_t m=0; m<numMeasurements; ++m){
                 double outputTmpDA = outputDA[m][t];
                 #pragma omp parallel for
                 for(size_t p=0; p<m_param_.numParticles; ++p){
@@ -559,7 +553,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             // calculate extrinsic information for legacy targets (at all except last iteration) and belief (at last iteration)
             if(outer != (m_param_.numOuterIterations-1)){
                 #pragma omp parallel for
-                for(int m=0; m<numMeasurements; ++m){
+                for(size_t m=0; m<numMeasurements; ++m){
                     getWeightsUnknown(weights_m_p, m_currentExistences_t_[t], m, weightsExtrinsic_t_m_p[t][m], currentExistencesExtrinsic_m_t[m][t]);
                 }
             }else{
@@ -568,7 +562,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         }
 
         // perform update step for new targets
-        int targetIndex = numLegacy - 1;
+        int targetIndex = int(numLegacy) - 1;
         for(int t=(numMeasurements-1); t>=0; --t){
             if(newIndexes_map.find(t) != newIndexes_map.end()){
                 targetIndex = targetIndex + 1;

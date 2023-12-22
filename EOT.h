@@ -21,9 +21,11 @@ using namespace std::chrono;
 
 class EOT{
     public:
-    	EOT(const eot_param& init_parameters);
+        EOT(){}
 
-    	~EOT();
+    	~EOT(){}
+
+        void init(const eot_param& init_parameters){m_param_ = init_parameters;}
 
     	void eot_track(const vector<measurement>& measurements, 
                        const grid_para& measurements_paras, 
