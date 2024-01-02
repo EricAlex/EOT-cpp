@@ -3,8 +3,8 @@
 void EOT::update_grid_map_param(const grid_para& measurements_paras){
     m_grid_para_ = measurements_paras;
     m_grid_resolution_reciprocal_ = 1 / m_grid_para_.grid_res;
-    m_cols_ = static_cast<uint32_t>((measurements_paras.dim1_max - measurements_paras.dim1_min) / m_grid_para_.grid_res);
-    m_rows_ = static_cast<uint32_t>((measurements_paras.dim2_max - measurements_paras.dim2_min) / m_grid_para_.grid_res);
+    m_cols_ = static_cast<uint32_t>((m_grid_para_.dim1_max - m_grid_para_.dim1_min) / m_grid_para_.grid_res);
+    m_rows_ = static_cast<uint32_t>((m_grid_para_.dim2_max - m_grid_para_.dim2_min) / m_grid_para_.grid_res);
     uint32_t power = log2(m_cols_);
     if (m_cols_ == (1U << power)) {
         m_cols_shift_ = power;
@@ -18,6 +18,11 @@ void EOT::coord2index(const double p1, const double p2, uint32_t& index){
     uint32_t c_idx = (p1 - m_grid_para_.dim1_min) * m_grid_resolution_reciprocal_ + 1;
     uint32_t r_idx = (p2 - m_grid_para_.dim2_min) * m_grid_resolution_reciprocal_ + 1;
     index = (r_idx << (m_cols_shift_)) + c_idx;
+}
+
+void EOT::index2coord(const uint32_t index, double& p1, double& p2){
+  p2 = (float(index / m_cols_) - 0.5) * m_grid_para_.grid_res + m_grid_para_.dim2_min;
+  p1 = (float(index - ((index / m_cols_) << (m_cols_shift_))) - 0.5) * m_grid_para_.grid_res + m_grid_para_.dim1_min;
 }
 
 void EOT::find_neighbors_(const uint32_t index, const uint32_t label, stack<uint32_t>& neighbors) {
@@ -105,37 +110,18 @@ double dist_func(const vec2d& t1, const vec2d& t2){
     return sqrt(std::pow(t1[0]-t2[0], 2) + std::pow(t1[1]-t2[1], 2));
 }
 
+bool sizeCmp(pair<size_t, size_t> p1, pair<size_t, size_t> p2){
+    return p1.second < p2.second;
+}
+
 bool EOT::getPromisingNewTargets(const vector<measurement>& measurements, 
                                  vector<size_t>& newIndexes, 
                                  vector<measurement>& ordered_measurements){
-    
-    // // grow seed grid
-    // uint32_t label = EOT_INIT_VAILD_GRID_LABEL + m_predicted_boxes_in_range_.size();
-    // auto it = m_index_label_map_.begin();
-    // while (it != m_index_label_map_.end()) {
-    //     if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
-    //     vector<uint32_t> temp_indices;
-    //     ++label;
-    //     it->second = label;
-    //     stack<uint32_t>
-    //         neighbors;  // normal road test max neighbors deep about 600
-    //     neighbors.emplace(it->first);
-    //     while (!neighbors.empty()) {
-    //         uint32_t cur_index = neighbors.top();
-    //         temp_indices.push_back(cur_index);
-    //         neighbors.pop();
-    //         find_neighbors_(cur_index, label, neighbors);
-    //     }
-    //     label_cluster_indices.push_back(temp_indices);
-    //     }
-    //     it++;
-    // }
-
     unordered_set<size_t> remainIndexes, rmedLegacyIndexes;
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(2);
+    double sigmaRatio(1.2);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -165,6 +151,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
         ordered_measurements.push_back(measurements[*it]);
     }
+    #if SIMULATION
     // clustering using DBSCAN
     vector<vec2d> m4Cluster;
     for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
@@ -201,6 +188,92 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(auto& n:noise){
         ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
     }
+    #else
+    m_index_label_map_.clear();
+    unordered_map<uint32_t, measurement> index_measurement_map;
+    for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
+        uint32_t index;
+        coord2index(measurements[*it](0), measurements[*it](1), index);
+        m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
+        index_measurement_map[index] = measurements[*it];
+        // if(it==remainIndexes.begin()){
+        //     uint32_t tmpIndex;
+        //     coord2index(measurements[*it](0), measurements[*it](1), tmpIndex);
+        //     measurement tmpM;
+        //     index2coord(tmpIndex, tmpM(0), tmpM(1));
+        //     cout<<"("<<measurements[*it](0)<<", "<<measurements[*it](1)<<")\t("<<tmpM(0)<<", "<<tmpM(1)<<")"<<endl;
+        // }
+    }
+    vector<vector<uint32_t>> label_cluster_indices;
+    vector<pair<size_t, size_t>> cluster_idx_size_pair;
+    // grow seed grid
+    uint32_t label = EOT_INIT_VAILD_GRID_LABEL;
+    auto it = m_index_label_map_.begin();
+    while (it != m_index_label_map_.end()) {
+        if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
+            vector<uint32_t> temp_indices;
+            ++label;
+            it->second = label;
+            stack<uint32_t> neighbors;
+            neighbors.emplace(it->first);
+            while (!neighbors.empty()) {
+                uint32_t cur_index = neighbors.top();
+                temp_indices.push_back(cur_index);
+                neighbors.pop();
+                find_neighbors_(cur_index, label, neighbors);
+            }
+            label_cluster_indices.push_back(temp_indices);
+            cluster_idx_size_pair.push_back(make_pair(label_cluster_indices.size()-1, temp_indices.size()));
+        }
+        it++;
+    }
+
+    // // plot result
+    // vector<double> x, y, size, color;
+    // for(size_t c=0; c<label_cluster_indices.size(); ++c){
+    //     for(size_t i=0; i<label_cluster_indices[c].size(); ++i){
+    //         x.push_back(index_measurement_map[label_cluster_indices[c][i]](0));
+    //         y.push_back(index_measurement_map[label_cluster_indices[c][i]](1));
+    //         size.push_back(3);
+    //         color.push_back(c+1);
+    //     }
+    // }
+    // // Plot line from given x and y data.
+    // auto l = matplot::scatter(x, y, size, color);
+    // l->marker_face(true);
+    // matplot::xlim({m_grid_para_.dim1_min, m_grid_para_.dim1_max});
+    // matplot::ylim({m_grid_para_.dim2_min, m_grid_para_.dim2_max});
+    // usleep(1e5);
+
+    sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
+    for(auto& p:cluster_idx_size_pair){
+        size_t m_size = label_cluster_indices[p.first].size();
+        vector<measurement> cluster(m_size);
+        measurement m_centor(0, 0);
+        for(size_t j=0; j<m_size; j++){
+            cluster[j] = index_measurement_map[label_cluster_indices[p.first][j]];
+            m_centor += cluster[j];
+        }
+        m_centor = m_centor/m_size;
+        size_t centor_idx(0);
+        double min_dist(numeric_limits<double>::infinity());
+        for(size_t j=0; j<m_size; j++){
+            measurement dist_vec = cluster[j] - m_centor;
+            double dist = dist_vec.norm();
+            if(dist<min_dist){
+                min_dist = dist;
+                centor_idx = j;
+            }
+        }
+        for(size_t j=0; j<m_size; j++){
+            if(j!=centor_idx){
+                ordered_measurements.push_back(cluster[j]);
+            }
+        }
+        ordered_measurements.push_back(cluster[centor_idx]);
+        newIndexes.push_back(ordered_measurements.size()-1);
+    }
+    #endif
 
     return true;
 }
@@ -308,12 +381,6 @@ void EOT::resampleSystematic(const vector<double>& weights, vector<size_t>& inde
     }
 }
 
-void EOT::copyStruct(po_extent& dest, const po_extent& src){
-    dest.e = src.e;
-    dest.eigenvalues = src.eigenvalues;
-    dest.eigenvectors = src.eigenvectors;
-}
-
 void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const int target){
     int numMeasurements = logWeights_m_p.size();
     vector<double> tmpWeights_p(m_param_.numParticles);
@@ -358,32 +425,24 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         vector<size_t> indexes(m_param_.numParticles);
         resampleSystematic(tmpWeights_p, indexes);
         vector<po_kinematic> tmpKinematic_p(m_param_.numParticles);
-        vector<po_extent> tmpExtent_p(m_param_.numParticles);
+        vector<Eigen::Matrix2d> tmpExtent_p(m_param_.numParticles);
+        vector<Eigen::Vector2d> tmpEigenvalues_p(m_param_.numParticles);
+        vector<Eigen::Matrix2d> tmpEigenvectors_p(m_param_.numParticles);
         #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpKinematic_p[p] = m_currentParticlesKinematic_t_p_[target][p];
-            copyStruct(tmpExtent_p[p], m_currentParticlesExtent_t_p_[target][p]);
+            tmpExtent_p[p] = m_currentParticlesExtent_t_p_[target][p].e;
+            tmpEigenvalues_p[p] = m_currentParticlesExtent_t_p_[target][p].eigenvalues;
+            tmpEigenvectors_p[p] = m_currentParticlesExtent_t_p_[target][p].eigenvectors;
         }
         #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
-            copyStruct(m_currentParticlesExtent_t_p_[target][p], tmpExtent_p[p]);
+            m_currentParticlesExtent_t_p_[target][p].e = tmpExtent_p[indexes[p]];
+            m_currentParticlesExtent_t_p_[target][p].eigenvalues = tmpEigenvalues_p[indexes[p]];
+            m_currentParticlesExtent_t_p_[target][p].eigenvectors = tmpEigenvectors_p[indexes[p]];
             m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
             m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
-        }
-    }else{
-        double nanValue = nan("");
-        #pragma omp parallel for
-        for(size_t p=0; p<m_param_.numParticles; ++p){
-            m_currentParticlesKinematic_t_p_[target][p].p1 = nanValue;
-            m_currentParticlesKinematic_t_p_[target][p].p2 = nanValue;
-            m_currentParticlesKinematic_t_p_[target][p].v1 = nanValue;
-            m_currentParticlesKinematic_t_p_[target][p].v2 = nanValue;
-            m_currentParticlesKinematic_t_p_[target][p].t = nanValue;
-            m_currentParticlesKinematic_t_p_[target][p].s = nanValue;
-            m_currentParticlesExtent_t_p_[target][p].e = (Eigen::Matrix2d() << nanValue, nanValue, nanValue, nanValue).finished();
-            m_currentParticlesExtent_t_p_[target][p].eigenvalues = (Eigen::Vector2d() << nanValue, nanValue).finished();
-            m_currentParticlesExtent_t_p_[target][p].eigenvectors = (Eigen::Matrix2d() << nanValue, nanValue, nanValue, nanValue).finished();
         }
     }
 }

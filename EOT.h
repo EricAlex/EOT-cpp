@@ -38,6 +38,7 @@ class EOT{
         float getTimer_millisec(){return (float)duration_cast<microseconds>(_time_finish - _time_start).count()/1000.0;}
         void update_grid_map_param(const grid_para& measurements_paras);
         void coord2index(const double p1, const double p2, uint32_t& index);
+        void index2coord(const uint32_t index, double& p1, double& p2);
         void find_neighbors_(const uint32_t index, const uint32_t label, stack<uint32_t>& neighbors);
         void update_grid_label_(const uint32_t grid_index, const uint32_t label, stack<uint32_t>& neighbors);
         bool performPrediction(const double delta_time);
@@ -52,7 +53,6 @@ class EOT{
         bool getPromisingNewTargets(const vector<measurement>& ori_measurements, 
                                     vector<size_t>& newIndexes, 
                                     vector<measurement>& ordered_measurements);
-        void copyStruct(po_extent& dest, const po_extent& src);
 	private:
         steady_clock::time_point _time_start;
         steady_clock::time_point _time_finish;
@@ -67,7 +67,9 @@ class EOT{
         unordered_map<uint32_t, uint32_t> m_index_label_map_;
         vector<po_label> m_currentLabels_t_;
         vector< vector<po_kinematic> > m_currentParticlesKinematic_t_p_;
+        vector<po_kinematic> m_currentKinematic_t_;
         vector<double> m_currentExistences_t_;
         vector< vector<po_extent> > m_currentParticlesExtent_t_p_;
+        vector<po_extent> m_currentExtent_t_;
         vector<PO> m_currentPotentialObjects_t_;
 };

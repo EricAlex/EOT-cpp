@@ -2,6 +2,10 @@
 #include <unistd.h>
 #include <unordered_set>
 #include <boost/filesystem.hpp>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 #include <matplot/matplot.h>
 
@@ -165,7 +169,7 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
-        .numParticles = 300,
+        .numParticles = 1000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
@@ -299,16 +303,93 @@ void loadData(const boost::filesystem::path& pcd_path,
 }
 int main(int argc, char *argv[]){
     if((argc>2)&&(strlen(argv[1])==2)&&(argv[1][0]=='-')&&(argv[1][1]=='i')){
+        double meanTargetDimension = 3;
+        double grid_resolution = 0.5;
+        eot_param para = {
+            .accelerationDeviation = 10,
+            .rotationalAccelerationDeviation = 0.003,
+            .survivalProbability = 0.999,
+            .meanBirths = 0.001,
+            .measurementVariance = grid_resolution*grid_resolution,
+            .meanMeasurements = 15,
+            .meanClutter = 5,
+            .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(25, 25),
+            .priorTurningRateDeviation = 0.01,
+            .meanTargetDimension = meanTargetDimension,
+            .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
+            .priorExtentDegreeFreedom = 30,
+            .degreeFreedomPrediction = 2000,
+            .numParticles = 300,
+            .regularizationDeviation = 0,
+            .detectionThreshold = 0.5,
+            .thresholdPruning = 1e-3,
+            .numOuterIterations = 2
+        };
+        EOT sim_eot;
+        sim_eot.init(para);
         string path(argv[2]);
         vector<boost::filesystem::path> stream = streamFile(path);
-        for(auto it=stream.begin(); it!=stream.end(); ++it){
+        boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
+            new pcl::visualization::PCLVisualizer("3D Viewer"));
+        auto stramIterator = stream.begin();
+        viewer->setCameraPosition(-30, 0, 5, 1, 0, 0, 0, 0, 1);
+        while (!viewer->wasStopped()) {
             vector<measurement> Measurements;
             grid_para grid_parameters;
             double scanTime;
             uint64_t frame_idx;
-            loadData(*it, Measurements, grid_parameters, scanTime, frame_idx);
-            cout<<"Measurements.szie(): "<<Measurements.size()<<endl;
-            usleep(1e5);
+            loadData(*stramIterator, Measurements, grid_parameters, scanTime, frame_idx);
+
+            cout<<"Number of measurements: "<<Measurements.size()<<endl;
+            vector<PO> potential_objects_out;
+            sim_eot.eot_track(Measurements, grid_parameters, scanTime, frame_idx, potential_objects_out);
+            cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
+
+            pcl::PointCloud<pcl::PointXYZ>::Ptr show_cloud_M(new pcl::PointCloud<pcl::PointXYZ>);
+            double step(0.1);
+            for(size_t m=0; m<Measurements.size(); ++m){
+                for(double b=0; b<=grid_parameters.grid_res; b+=step){
+                    show_cloud_M->push_back(pcl::PointXYZ(Measurements[m](1)-0.5*grid_parameters.grid_res, Measurements[m](0)-0.5*grid_parameters.grid_res+b, 0));
+                    show_cloud_M->push_back(pcl::PointXYZ(Measurements[m](1)-0.5*grid_parameters.grid_res+b, Measurements[m](0)+0.5*grid_parameters.grid_res, 0));
+                    show_cloud_M->push_back(pcl::PointXYZ(Measurements[m](1)+0.5*grid_parameters.grid_res, Measurements[m](0)+0.5*grid_parameters.grid_res-b, 0));
+                    show_cloud_M->push_back(pcl::PointXYZ(Measurements[m](1)+0.5*grid_parameters.grid_res-b, Measurements[m](0)-0.5*grid_parameters.grid_res, 0));
+                }
+            }
+
+            pcl::PointCloud<pcl::PointXYZ>::Ptr show_cloud_PO(new pcl::PointCloud<pcl::PointXYZ>);
+            if(potential_objects_out.size()>0){
+                for(size_t t=0; t<potential_objects_out.size(); ++t){
+                    vector<Eigen::Vector2d> tmpPolygon;
+                    utilities::extent2Polygon(potential_objects_out[t].kinematic, potential_objects_out[t].extent.eigenvalues, 
+                                            potential_objects_out[t].extent.eigenvectors, 1.0, tmpPolygon);
+                    tmpPolygon.push_back(tmpPolygon[0]);
+                    for(size_t v=0; v<(tmpPolygon.size()-1); ++v){
+                        Eigen::Vector2d edge = tmpPolygon[v+1] - tmpPolygon[v];
+                        double edge_length = edge.norm();
+                        for(double b=0; b<=edge_length; b+=step){
+                            Eigen::Vector2d tmpP = tmpPolygon[v] + b*edge/edge_length;
+                            show_cloud_PO->push_back(pcl::PointXYZ(tmpP(1), tmpP(0), 0));
+                        }
+                    }
+                }
+            }
+
+            pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> single_color_cloud_M(show_cloud_M, 0, 0, 255);
+            viewer->addPointCloud<pcl::PointXYZ>(show_cloud_M, single_color_cloud_M, "cloud_M");
+            viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloud_M");
+
+            pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> single_color_cloud_PO(show_cloud_PO, 255, 255, 0);
+            viewer->addPointCloud<pcl::PointXYZ>(show_cloud_PO, single_color_cloud_PO, "cloud_PO");
+            viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud_PO");
+
+            stramIterator++;
+            if(stramIterator == stream.end()){
+                // stramIterator = stream.begin();
+                break;
+            }
+            viewer->spinOnce (100);
+            viewer->removeAllPointClouds();
+            viewer->removeAllShapes();
         }
     }
     return 0;

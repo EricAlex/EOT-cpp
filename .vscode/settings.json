@@ -5,6 +5,8 @@
         "vector": "cpp",
         "complex": "cpp",
         "core": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "ostream": "cpp",
+        "numericaldiff": "cpp"
     }
 }
