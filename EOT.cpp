@@ -1,5 +1,7 @@
 #include "EOT.h"
 
+#include <matplot/matplot.h>
+
 void EOT::update_grid_map_param(const grid_para& measurements_paras){
     m_grid_para_ = measurements_paras;
     m_grid_resolution_reciprocal_ = 1 / m_grid_para_.grid_res;
@@ -196,13 +198,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         coord2index(measurements[*it](0), measurements[*it](1), index);
         m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
         index_measurement_map[index] = measurements[*it];
-        // if(it==remainIndexes.begin()){
-        //     uint32_t tmpIndex;
-        //     coord2index(measurements[*it](0), measurements[*it](1), tmpIndex);
-        //     measurement tmpM;
-        //     index2coord(tmpIndex, tmpM(0), tmpM(1));
-        //     cout<<"("<<measurements[*it](0)<<", "<<measurements[*it](1)<<")\t("<<tmpM(0)<<", "<<tmpM(1)<<")"<<endl;
-        // }
     }
     vector<vector<uint32_t>> label_cluster_indices;
     vector<pair<size_t, size_t>> cluster_idx_size_pair;
@@ -227,23 +222,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         }
         it++;
     }
-
-    // // plot result
-    // vector<double> x, y, size, color;
-    // for(size_t c=0; c<label_cluster_indices.size(); ++c){
-    //     for(size_t i=0; i<label_cluster_indices[c].size(); ++i){
-    //         x.push_back(index_measurement_map[label_cluster_indices[c][i]](0));
-    //         y.push_back(index_measurement_map[label_cluster_indices[c][i]](1));
-    //         size.push_back(3);
-    //         color.push_back(c+1);
-    //     }
-    // }
-    // // Plot line from given x and y data.
-    // auto l = matplot::scatter(x, y, size, color);
-    // l->marker_face(true);
-    // matplot::xlim({m_grid_para_.dim1_min, m_grid_para_.dim1_max});
-    // matplot::ylim({m_grid_para_.dim2_min, m_grid_para_.dim2_max});
-    // usleep(1e5);
 
     sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
     for(auto& p:cluster_idx_size_pair){

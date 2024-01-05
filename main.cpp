@@ -169,7 +169,7 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 100,
         .degreeFreedomPrediction = 20000,
-        .numParticles = 1000,
+        .numParticles = 5000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
@@ -317,13 +317,13 @@ int main(int argc, char *argv[]){
             .priorTurningRateDeviation = 0.01,
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
-            .priorExtentDegreeFreedom = 30,
-            .degreeFreedomPrediction = 2000,
-            .numParticles = 300,
+            .priorExtentDegreeFreedom = 50,
+            .degreeFreedomPrediction = 20000,
+            .numParticles = 1000,
             .regularizationDeviation = 0,
             .detectionThreshold = 0.5,
             .thresholdPruning = 1e-3,
-            .numOuterIterations = 2
+            .numOuterIterations = 3
         };
         EOT sim_eot;
         sim_eot.init(para);
@@ -332,7 +332,7 @@ int main(int argc, char *argv[]){
         boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
             new pcl::visualization::PCLVisualizer("3D Viewer"));
         auto stramIterator = stream.begin();
-        viewer->setCameraPosition(-30, 0, 5, 1, 0, 0, 0, 0, 1);
+        viewer->setCameraPosition(100, 0, 500, 100, 0, 1, 1, 0, 0);
         while (!viewer->wasStopped()) {
             vector<measurement> Measurements;
             grid_para grid_parameters;

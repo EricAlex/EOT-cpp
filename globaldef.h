@@ -4,7 +4,7 @@
 using namespace std;
 
 #define DEBUG	false
-#define SIMULATION	true
+#define SIMULATION	false
 
 #define LIDAR_ANGULAR_RESOLUTION	0.0013962634 // in radian
 #define EOT_INIT_VAILD_GRID_LABEL	1
