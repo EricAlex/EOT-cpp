@@ -144,6 +144,30 @@ void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targ
         }
     }
 }
+
+void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vector4d> >& targetTracks, 
+                                               vector< vector<Eigen::Vector2d> >& clutteredMeasurements){
+    size_t numSteps = targetTracks.size();
+    clutteredMeasurements.resize(numSteps);
+    float mLengthStep(0.5);
+    for(size_t s=0; s<numSteps; ++s){
+        vector<Eigen::Vector2d> measurements;
+        vector<Eigen::Vector2d> tmpPolygon;
+        tmpPolygon.push_back(Eigen::Vector2d(-1, 2)); tmpPolygon.push_back(Eigen::Vector2d(1, 2));
+        tmpPolygon.push_back(Eigen::Vector2d(1, -2)); tmpPolygon.push_back(Eigen::Vector2d(-1, -2));
+        tmpPolygon.push_back(Eigen::Vector2d(-1, 2));
+        for(size_t i=0; i<(tmpPolygon.size()-1); ++i){
+            Eigen::Vector2d edgeVec = tmpPolygon[i+1] - tmpPolygon[i];
+            float edgeL = edgeVec.norm();
+            edgeVec.normalize();
+            for(float p=0; p<edgeL; p+=mLengthStep){
+                measurements.push_back(tmpPolygon[i] + p*edgeVec);
+            }
+        }
+        measurements.push_back(Eigen::Vector2d(0, 0));
+        clutteredMeasurements[s] = measurements;
+    }
+}
 #if SIMULATION
 int main(void){
     // parameters for simulations
@@ -155,21 +179,23 @@ int main(void){
         .grid_res = 0.5
     };
     double meanTargetDimension = 3;
+    double measurementDeviation = 5*meanTargetDimension/60;
+    // double measurementDeviation = grid_parameters.grid_res;
     eot_param para = {
         .accelerationDeviation = 1,
         .rotationalAccelerationDeviation = 0.01,
-        .survivalProbability = 0.999,
-        .meanBirths = 0.001,
-        .measurementVariance = grid_parameters.grid_res*grid_parameters.grid_res,
-        .meanMeasurements = 25,
+        .survivalProbability = 0.99999,
+        .meanBirths = 0.1,
+        .measurementVariance = measurementDeviation*measurementDeviation,
+        .meanMeasurements = 30,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         .priorTurningRateDeviation = 0.01,
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
-        .priorExtentDegreeFreedom = 100,
-        .degreeFreedomPrediction = 20000,
-        .numParticles = 5000,
+        .priorExtentDegreeFreedom = 30,
+        .degreeFreedomPrediction = 2000,
+        .numParticles = 1000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
@@ -190,6 +216,7 @@ int main(void){
     generateTracksUnknown(para, startStates, startMatrixes, appearanceFromTo, numSteps, scanTime, targetTracks, targetExtents);
     vector< vector<Eigen::Vector2d> > clutteredMeasurements;
     generateClutteredMeasurements(targetTracks, targetExtents, para, grid_parameters, targetShape::RECTANGLE, clutteredMeasurements);
+    // generateClutteredMeasurements_static_test(targetTracks, clutteredMeasurements);
     EOT sim_eot;
     sim_eot.init(para);
     for(size_t s=0; s<numSteps; ++s){
@@ -209,7 +236,8 @@ int main(void){
         l->marker_color("b");
         l->marker_face(true);
         matplot::hold(on);
-
+        
+        // plot GT
         for(size_t t=0; t<targetTracks[s].size(); ++t){
             if(isnan(targetTracks[s][t](0))){
                 continue;
@@ -228,6 +256,7 @@ int main(void){
             matplot::plot(x, y, "g")->line_width(3);
         }
 
+        // plot result
         if(potential_objects_out.size()>0){
             for(size_t t=0; t<potential_objects_out.size(); ++t){
                 x.clear(); y.clear();
@@ -249,6 +278,8 @@ int main(void){
         // Set x-axis and y-axis
         matplot::xlim({-startRadius-10, startRadius+10});
         matplot::ylim({-startRadius-10, startRadius+10});
+        // matplot::xlim({-5, 5});
+        // matplot::ylim({-5, 5});
         usleep(1e5);
     }
     return 0;
@@ -304,26 +335,26 @@ void loadData(const boost::filesystem::path& pcd_path,
 int main(int argc, char *argv[]){
     if((argc>2)&&(strlen(argv[1])==2)&&(argv[1][0]=='-')&&(argv[1][1]=='i')){
         double meanTargetDimension = 3;
-        double grid_resolution = 0.5;
+        double measurementDeviation = 0.5;
         eot_param para = {
-            .accelerationDeviation = 10,
-            .rotationalAccelerationDeviation = 0.003,
+            .accelerationDeviation = 5,
+            .rotationalAccelerationDeviation = 0.01,
             .survivalProbability = 0.999,
             .meanBirths = 0.001,
-            .measurementVariance = grid_resolution*grid_resolution,
-            .meanMeasurements = 15,
+            .measurementVariance = measurementDeviation*measurementDeviation,
+            .meanMeasurements = 25,
             .meanClutter = 5,
             .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(25, 25),
             .priorTurningRateDeviation = 0.01,
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
-            .priorExtentDegreeFreedom = 50,
-            .degreeFreedomPrediction = 20000,
-            .numParticles = 1000,
+            .priorExtentDegreeFreedom = 30,
+            .degreeFreedomPrediction = 2000,
+            .numParticles = 300,
             .regularizationDeviation = 0,
             .detectionThreshold = 0.5,
             .thresholdPruning = 1e-3,
-            .numOuterIterations = 3
+            .numOuterIterations = 2
         };
         EOT sim_eot;
         sim_eot.init(para);

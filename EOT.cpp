@@ -66,8 +66,13 @@ bool EOT::performPrediction(const double delta_time){
                 // rot_mat << cos(rot_ang), sin(rot_ang),
                 //            -sin(rot_ang), cos(rot_ang);
                 // Eigen::MatrixXd S = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose()) / m_param_.degreeFreedomPrediction;
-                Eigen::MatrixXd S = m_currentParticlesExtent_t_p_[t][p].e / m_param_.degreeFreedomPrediction;
-                m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleWishart(m_param_.degreeFreedomPrediction, S);
+                // Eigen::MatrixXd S = m_currentParticlesExtent_t_p_[t][p].e / m_param_.degreeFreedomPrediction;
+                // m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleWishart(m_param_.degreeFreedomPrediction, S);
+                // Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
+                // m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
+                // m_currentParticlesExtent_t_p_[t][p].eigenvectors = eigensolver.eigenvectors();
+                Eigen::MatrixXd ExtentShape = m_currentParticlesExtent_t_p_[t][p].e*(m_param_.degreeFreedomPrediction-m_currentParticlesExtent_t_p_[t][p].e.cols()-1);
+                m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
                 Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
                 m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
                 m_currentParticlesExtent_t_p_[t][p].eigenvectors = eigensolver.eigenvectors();
@@ -153,7 +158,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
         ordered_measurements.push_back(measurements[*it]);
     }
-    #if SIMULATION
+    // #if SIMULATION
     // clustering using DBSCAN
     vector<vec2d> m4Cluster;
     for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
@@ -190,68 +195,68 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(auto& n:noise){
         ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
     }
-    #else
-    m_index_label_map_.clear();
-    unordered_map<uint32_t, measurement> index_measurement_map;
-    for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
-        uint32_t index;
-        coord2index(measurements[*it](0), measurements[*it](1), index);
-        m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
-        index_measurement_map[index] = measurements[*it];
-    }
-    vector<vector<uint32_t>> label_cluster_indices;
-    vector<pair<size_t, size_t>> cluster_idx_size_pair;
-    // grow seed grid
-    uint32_t label = EOT_INIT_VAILD_GRID_LABEL;
-    auto it = m_index_label_map_.begin();
-    while (it != m_index_label_map_.end()) {
-        if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
-            vector<uint32_t> temp_indices;
-            ++label;
-            it->second = label;
-            stack<uint32_t> neighbors;
-            neighbors.emplace(it->first);
-            while (!neighbors.empty()) {
-                uint32_t cur_index = neighbors.top();
-                temp_indices.push_back(cur_index);
-                neighbors.pop();
-                find_neighbors_(cur_index, label, neighbors);
-            }
-            label_cluster_indices.push_back(temp_indices);
-            cluster_idx_size_pair.push_back(make_pair(label_cluster_indices.size()-1, temp_indices.size()));
-        }
-        it++;
-    }
+    // #else
+    // m_index_label_map_.clear();
+    // unordered_map<uint32_t, measurement> index_measurement_map;
+    // for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
+    //     uint32_t index;
+    //     coord2index(measurements[*it](0), measurements[*it](1), index);
+    //     m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
+    //     index_measurement_map[index] = measurements[*it];
+    // }
+    // vector<vector<uint32_t>> label_cluster_indices;
+    // vector<pair<size_t, size_t>> cluster_idx_size_pair;
+    // // grow seed grid
+    // uint32_t label = EOT_INIT_VAILD_GRID_LABEL;
+    // auto it = m_index_label_map_.begin();
+    // while (it != m_index_label_map_.end()) {
+    //     if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
+    //         vector<uint32_t> temp_indices;
+    //         ++label;
+    //         it->second = label;
+    //         stack<uint32_t> neighbors;
+    //         neighbors.emplace(it->first);
+    //         while (!neighbors.empty()) {
+    //             uint32_t cur_index = neighbors.top();
+    //             temp_indices.push_back(cur_index);
+    //             neighbors.pop();
+    //             find_neighbors_(cur_index, label, neighbors);
+    //         }
+    //         label_cluster_indices.push_back(temp_indices);
+    //         cluster_idx_size_pair.push_back(make_pair(label_cluster_indices.size()-1, temp_indices.size()));
+    //     }
+    //     it++;
+    // }
 
-    sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
-    for(auto& p:cluster_idx_size_pair){
-        size_t m_size = label_cluster_indices[p.first].size();
-        vector<measurement> cluster(m_size);
-        measurement m_centor(0, 0);
-        for(size_t j=0; j<m_size; j++){
-            cluster[j] = index_measurement_map[label_cluster_indices[p.first][j]];
-            m_centor += cluster[j];
-        }
-        m_centor = m_centor/m_size;
-        size_t centor_idx(0);
-        double min_dist(numeric_limits<double>::infinity());
-        for(size_t j=0; j<m_size; j++){
-            measurement dist_vec = cluster[j] - m_centor;
-            double dist = dist_vec.norm();
-            if(dist<min_dist){
-                min_dist = dist;
-                centor_idx = j;
-            }
-        }
-        for(size_t j=0; j<m_size; j++){
-            if(j!=centor_idx){
-                ordered_measurements.push_back(cluster[j]);
-            }
-        }
-        ordered_measurements.push_back(cluster[centor_idx]);
-        newIndexes.push_back(ordered_measurements.size()-1);
-    }
-    #endif
+    // sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
+    // for(auto& p:cluster_idx_size_pair){
+    //     size_t m_size = label_cluster_indices[p.first].size();
+    //     vector<measurement> cluster(m_size);
+    //     measurement m_centor(0, 0);
+    //     for(size_t j=0; j<m_size; j++){
+    //         cluster[j] = index_measurement_map[label_cluster_indices[p.first][j]];
+    //         m_centor += cluster[j];
+    //     }
+    //     m_centor = m_centor/m_size;
+    //     size_t centor_idx(0);
+    //     double min_dist(numeric_limits<double>::infinity());
+    //     for(size_t j=0; j<m_size; j++){
+    //         measurement dist_vec = cluster[j] - m_centor;
+    //         double dist = dist_vec.norm();
+    //         if(dist<min_dist){
+    //             min_dist = dist;
+    //             centor_idx = j;
+    //         }
+    //     }
+    //     for(size_t j=0; j<m_size; j++){
+    //         if(j!=centor_idx){
+    //             ordered_measurements.push_back(cluster[j]);
+    //         }
+    //     }
+    //     ordered_measurements.push_back(cluster[centor_idx]);
+    //     newIndexes.push_back(ordered_measurements.size()-1);
+    // }
+    // #endif
 
     return true;
 }
@@ -378,6 +383,10 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
             max_val_idx = p;
         }
     }
+    // m_currentKinematic_t_[target] = m_currentParticlesKinematic_t_p_[target][max_val_idx];
+    // m_currentExtent_t_[target].e = m_currentParticlesExtent_t_p_[target][max_val_idx].e;
+    // m_currentExtent_t_[target].eigenvalues = m_currentParticlesExtent_t_p_[target][max_val_idx].eigenvalues;
+    // m_currentExtent_t_[target].eigenvectors = m_currentParticlesExtent_t_p_[target][max_val_idx].eigenvectors;
     double aliveUpdate = std::accumulate(exp_tmpWeights_p.cbegin(), exp_tmpWeights_p.cend(), 0.0)/exp_tmpWeights_p.size();
     if(isinf(aliveUpdate)){
         m_currentExistences_t_[target] = 1;
@@ -400,6 +409,23 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpWeights_p[p] = tmpWeights_p[p]/tmpSum;
         }
+
+        // po_kinematic sum_kinematic = {0, 0, 0, 0, 0, 0};
+        // m_currentKinematic_t_[target] = sum_kinematic;
+        // m_currentExtent_t_[target].e = (Eigen::Matrix2d() << 0, 0, 0, 0).finished();
+        // for(size_t p=0; p<m_param_.numParticles; ++p){
+        //     m_currentKinematic_t_[target].p1 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].p1;
+        //     m_currentKinematic_t_[target].p2 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].p2;
+        //     m_currentKinematic_t_[target].v1 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].v1;
+        //     m_currentKinematic_t_[target].v2 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].v2;
+        //     m_currentKinematic_t_[target].t += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].t;
+        //     m_currentKinematic_t_[target].s += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].s;
+        //     m_currentExtent_t_[target].e += tmpWeights_p[p]*m_currentParticlesExtent_t_p_[target][p].e;
+        // }
+        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentExtent_t_[target].e);
+        // m_currentExtent_t_[target].eigenvalues = eigensolver.eigenvalues();
+        // m_currentExtent_t_[target].eigenvectors = eigensolver.eigenvectors();
+
         vector<size_t> indexes(m_param_.numParticles);
         resampleSystematic(tmpWeights_p, indexes);
         vector<po_kinematic> tmpKinematic_p(m_param_.numParticles);
@@ -496,6 +522,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_currentParticlesExtent_t_p_.push_back(extent_p);
         m_currentExistences_t_.push_back(init_new_existence);
     }
+    m_currentKinematic_t_.resize(m_currentExistences_t_.size());
+    m_currentExtent_t_.resize(m_currentExistences_t_.size());
     vector< vector<double> > currentExistencesExtrinsic_m_t(numMeasurements, m_currentExistences_t_);
     vector< vector< vector<double> > > weightsExtrinsic_t_m_p(numLegacy, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
     vector< vector< vector<double> > > weightsExtrinsicNew_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
@@ -658,12 +686,12 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             m_currentParticlesKinematic_t_p_.erase(m_currentParticlesKinematic_t_p_.begin()+t);
             m_currentParticlesExtent_t_p_.erase(m_currentParticlesExtent_t_p_.begin()+t);
             m_currentLabels_t_.erase(m_currentLabels_t_.begin()+t);
+            m_currentKinematic_t_.erase(m_currentKinematic_t_.begin()+t);
+            m_currentExtent_t_.erase(m_currentExtent_t_.begin()+t);
         }else{
             t++;
         }
     }
-
-    cout<<"After pruning: "<<m_currentExistences_t_.size()<<endl;
 
     // perform estimation
     m_currentPotentialObjects_t_.resize(0);
@@ -692,10 +720,21 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(tmpDetectedPO.extent.e);
             tmpDetectedPO.extent.eigenvalues = eigensolver.eigenvalues();
             tmpDetectedPO.extent.eigenvectors = eigensolver.eigenvectors();
+            // tmpDetectedPO.kinematic = m_currentKinematic_t_[t];
+            // tmpDetectedPO.extent.e = m_currentExtent_t_[t].e;
+            // tmpDetectedPO.extent.e = m_currentExtent_t_[t].e;
+            // tmpDetectedPO.extent.eigenvalues = m_currentExtent_t_[t].eigenvalues;
+            // tmpDetectedPO.extent.eigenvectors = m_currentExtent_t_[t].eigenvectors;
             m_currentPotentialObjects_t_.push_back(tmpDetectedPO);
             potential_objects_out.push_back(tmpDetectedPO);
         }
     }
+
+    // m_currentExistences_t_.clear();
+    // m_currentParticlesKinematic_t_p_.clear();
+    // m_currentParticlesExtent_t_p_.clear();
+    // m_currentLabels_t_.clear();
+    // m_currentPotentialObjects_t_.clear();
 
     timer_stop();
     cout<<"EOT done, costs "<<getTimer_millisec()<<" ms."<<endl;

@@ -67,9 +67,9 @@ class EOT{
         unordered_map<uint32_t, uint32_t> m_index_label_map_;
         vector<po_label> m_currentLabels_t_;
         vector< vector<po_kinematic> > m_currentParticlesKinematic_t_p_;
-        vector<po_kinematic> m_currentKinematic_t_;
         vector<double> m_currentExistences_t_;
         vector< vector<po_extent> > m_currentParticlesExtent_t_p_;
-        vector<po_extent> m_currentExtent_t_;
         vector<PO> m_currentPotentialObjects_t_;
+        vector<po_kinematic> m_currentKinematic_t_;
+        vector<po_extent> m_currentExtent_t_;
 };
