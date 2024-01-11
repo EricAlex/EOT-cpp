@@ -60,18 +60,13 @@ bool EOT::performPrediction(const double delta_time){
             m_currentExistences_t_[t] *= m_param_.survivalProbability;
             #pragma omp parallel for
             for(size_t p=0; p<m_param_.numParticles; ++p){
-                // // prediction with rotation
-                // double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
-                // Eigen::Matrix2d rot_mat;
-                // rot_mat << cos(rot_ang), sin(rot_ang),
-                //            -sin(rot_ang), cos(rot_ang);
-                // Eigen::MatrixXd S = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose()) / m_param_.degreeFreedomPrediction;
-                // Eigen::MatrixXd S = m_currentParticlesExtent_t_p_[t][p].e / m_param_.degreeFreedomPrediction;
-                // m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleWishart(m_param_.degreeFreedomPrediction, S);
-                // Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
-                // m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
-                // m_currentParticlesExtent_t_p_[t][p].eigenvectors = eigensolver.eigenvectors();
-                Eigen::MatrixXd ExtentShape = m_currentParticlesExtent_t_p_[t][p].e*(m_param_.degreeFreedomPrediction-m_currentParticlesExtent_t_p_[t][p].e.cols()-1);
+                // prediction with rotation
+                double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
+                Eigen::Matrix2d rot_mat;
+                rot_mat << cos(rot_ang), sin(rot_ang),
+                           -sin(rot_ang), cos(rot_ang);
+                Eigen::MatrixXd meanExtent = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose());
+                Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
                 m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
                 Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
                 m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
@@ -97,13 +92,13 @@ bool EOT::performPrediction(const double delta_time){
         for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
             m_currentPotentialObjects_t_[t].kinematic.p1 += delta_time*m_currentPotentialObjects_t_[t].kinematic.v1;
             m_currentPotentialObjects_t_[t].kinematic.p2 += delta_time*m_currentPotentialObjects_t_[t].kinematic.v2;
-            // // prediction with rotation
-            // double rot_ang = m_currentPotentialObjects_t_[t].kinematic.t * delta_time;
-            // Eigen::Matrix2d rot_mat;
-            // rot_mat << cos(rot_ang), sin(rot_ang),
-            //            -sin(rot_ang), cos(rot_ang);
-            // m_currentPotentialObjects_t_[t].extent.e = rot_mat * m_currentPotentialObjects_t_[t].extent.e * rot_mat.transpose();
-            // m_currentPotentialObjects_t_[t].extent.eigenvectors = rot_mat * m_currentPotentialObjects_t_[t].extent.eigenvectors * rot_mat.transpose();
+            // prediction with rotation
+            double rot_ang = m_currentPotentialObjects_t_[t].kinematic.t * delta_time;
+            Eigen::Matrix2d rot_mat;
+            rot_mat << cos(rot_ang), sin(rot_ang),
+                       -sin(rot_ang), cos(rot_ang);
+            m_currentPotentialObjects_t_[t].extent.e = rot_mat * m_currentPotentialObjects_t_[t].extent.e * rot_mat.transpose();
+            m_currentPotentialObjects_t_[t].extent.eigenvectors = rot_mat * m_currentPotentialObjects_t_[t].extent.eigenvectors * rot_mat.transpose();
         }
     }else{
         m_err_str_ = "[ERROR] performPrediction: legacy target numbers do not match " + to_string(m_currentParticlesKinematic_t_p_.size())
@@ -155,9 +150,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         }
     }
 
-    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
-        ordered_measurements.push_back(measurements[*it]);
-    }
     // #if SIMULATION
     // clustering using DBSCAN
     vector<vec2d> m4Cluster;
@@ -257,6 +249,10 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     //     newIndexes.push_back(ordered_measurements.size()-1);
     // }
     // #endif
+
+    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
+        ordered_measurements.push_back(measurements[*it]);
+    }
 
     return true;
 }

@@ -7,6 +7,7 @@
         "core": "cpp",
         "*.ipp": "cpp",
         "ostream": "cpp",
-        "numericaldiff": "cpp"
+        "numericaldiff": "cpp",
+        "random": "cpp"
     }
 }

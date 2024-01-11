@@ -150,12 +150,23 @@ void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vecto
     size_t numSteps = targetTracks.size();
     clutteredMeasurements.resize(numSteps);
     float mLengthStep(0.5);
+    vector<Eigen::Vector2d> tmpPolygon;
+    tmpPolygon.push_back(Eigen::Vector2d(-1, 2)); 
+    tmpPolygon.push_back(Eigen::Vector2d(1, 2));
+    tmpPolygon.push_back(Eigen::Vector2d(1, -2)); 
+    tmpPolygon.push_back(Eigen::Vector2d(-1, -2));
+    tmpPolygon.push_back(Eigen::Vector2d(-1, 2));
+    double rot_ang(3*M_PI/180);
+    // rot_ang = 0;
     for(size_t s=0; s<numSteps; ++s){
+        rot_ang += M_PI/180/5;
+        Eigen::Matrix2d rot_mat;
+        rot_mat << cos(rot_ang), -sin(rot_ang),
+                    sin(rot_ang), cos(rot_ang);
+        for(size_t i=0; i<tmpPolygon.size(); ++i){
+            tmpPolygon[i] = rot_mat * tmpPolygon[i];
+        }
         vector<Eigen::Vector2d> measurements;
-        vector<Eigen::Vector2d> tmpPolygon;
-        tmpPolygon.push_back(Eigen::Vector2d(-1, 2)); tmpPolygon.push_back(Eigen::Vector2d(1, 2));
-        tmpPolygon.push_back(Eigen::Vector2d(1, -2)); tmpPolygon.push_back(Eigen::Vector2d(-1, -2));
-        tmpPolygon.push_back(Eigen::Vector2d(-1, 2));
         for(size_t i=0; i<(tmpPolygon.size()-1); ++i){
             Eigen::Vector2d edgeVec = tmpPolygon[i+1] - tmpPolygon[i];
             float edgeL = edgeVec.norm();
@@ -170,6 +181,8 @@ void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vecto
 }
 #if SIMULATION
 int main(void){
+    #define STATIC_SIMULATION false
+    #define EXPORT_FIGURE	false
     // parameters for simulations
     grid_para grid_parameters = {
         .dim1_min = -200,
@@ -183,14 +196,14 @@ int main(void){
     // double measurementDeviation = grid_parameters.grid_res;
     eot_param para = {
         .accelerationDeviation = 1,
-        .rotationalAccelerationDeviation = 0.01,
-        .survivalProbability = 0.99999,
-        .meanBirths = 0.1,
+        .rotationalAccelerationDeviation = 15*M_PI/180,
+        .survivalProbability = 0.99,
+        .meanBirths = 0.01,
         .measurementVariance = measurementDeviation*measurementDeviation,
         .meanMeasurements = 30,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
-        .priorTurningRateDeviation = 0.01,
+        .priorTurningRateDeviation = 20*M_PI/180,
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
@@ -201,7 +214,11 @@ int main(void){
         .thresholdPruning = 1e-3,
         .numOuterIterations = 2
     };
-    size_t numSteps = 60;
+    #if STATIC_SIMULATION
+        size_t numSteps = 100;
+    #else
+        size_t numSteps = 60;
+    #endif
     size_t numTargets = 5;
     double startRadius = 75;
     double startVelocity = 10;
@@ -215,10 +232,15 @@ int main(void){
     vector< vector<Eigen::Matrix2d> > targetExtents;
     generateTracksUnknown(para, startStates, startMatrixes, appearanceFromTo, numSteps, scanTime, targetTracks, targetExtents);
     vector< vector<Eigen::Vector2d> > clutteredMeasurements;
-    generateClutteredMeasurements(targetTracks, targetExtents, para, grid_parameters, targetShape::RECTANGLE, clutteredMeasurements);
-    // generateClutteredMeasurements_static_test(targetTracks, clutteredMeasurements);
+    #if STATIC_SIMULATION
+        generateClutteredMeasurements_static_test(targetTracks, clutteredMeasurements);
+    #else
+        generateClutteredMeasurements(targetTracks, targetExtents, para, grid_parameters, targetShape::RECTANGLE, clutteredMeasurements);
+    #endif
     EOT sim_eot;
     sim_eot.init(para);
+    auto h = matplot::figure();
+    h->size(600, 600);
     for(size_t s=0; s<numSteps; ++s){
         cout<<"Number of measurements: "<<clutteredMeasurements[s].size()<<endl;
         vector<PO> potential_objects_out;
@@ -237,24 +259,26 @@ int main(void){
         l->marker_face(true);
         matplot::hold(on);
         
-        // plot GT
-        for(size_t t=0; t<targetTracks[s].size(); ++t){
-            if(isnan(targetTracks[s][t](0))){
-                continue;
+        #if !STATIC_SIMULATION
+            // plot GT
+            for(size_t t=0; t<targetTracks[s].size(); ++t){
+                if(isnan(targetTracks[s][t](0))){
+                    continue;
+                }
+                po_kinematic tmpKine = {targetTracks[s][t](0), targetTracks[s][t](1), targetTracks[s][t](2), targetTracks[s][t](3), 0, 0};
+                Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(targetExtents[s][t]);
+                x.clear(); y.clear();
+                vector<Eigen::Vector2d> tmpPolygon;
+                utilities::extent2Polygon(tmpKine, eigensolver.eigenvalues(), eigensolver.eigenvectors(), 1.0, tmpPolygon);
+                for(size_t v=0; v<tmpPolygon.size(); ++v){
+                    x.push_back(tmpPolygon[v](0));
+                    y.push_back(tmpPolygon[v](1));
+                }
+                x.push_back(tmpPolygon[0](0));
+                y.push_back(tmpPolygon[0](1));
+                matplot::plot(x, y, "g")->line_width(3);
             }
-            po_kinematic tmpKine = {targetTracks[s][t](0), targetTracks[s][t](1), targetTracks[s][t](2), targetTracks[s][t](3), 0, 0};
-            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(targetExtents[s][t]);
-            x.clear(); y.clear();
-            vector<Eigen::Vector2d> tmpPolygon;
-            utilities::extent2Polygon(tmpKine, eigensolver.eigenvalues(), eigensolver.eigenvectors(), 1.0, tmpPolygon);
-            for(size_t v=0; v<tmpPolygon.size(); ++v){
-                x.push_back(tmpPolygon[v](0));
-                y.push_back(tmpPolygon[v](1));
-            }
-            x.push_back(tmpPolygon[0](0));
-            y.push_back(tmpPolygon[0](1));
-            matplot::plot(x, y, "g")->line_width(3);
-        }
+        #endif
 
         // plot result
         if(potential_objects_out.size()>0){
@@ -276,10 +300,19 @@ int main(void){
         matplot::hold(off);
 
         // Set x-axis and y-axis
-        matplot::xlim({-startRadius-10, startRadius+10});
-        matplot::ylim({-startRadius-10, startRadius+10});
-        // matplot::xlim({-5, 5});
-        // matplot::ylim({-5, 5});
+        #if STATIC_SIMULATION
+            matplot::xlim({-5, 5});
+            matplot::ylim({-5, 5});
+        #else
+            matplot::xlim({-startRadius-10, startRadius+10});
+            matplot::ylim({-startRadius-10, startRadius+10});
+        #endif
+
+        matplot::title(std::to_string(s));
+
+        #if EXPORT_FIGURE
+            matplot::save("export/"+std::to_string(s)+".jpg");
+        #endif
         usleep(1e5);
     }
     return 0;
@@ -339,18 +372,18 @@ int main(int argc, char *argv[]){
         eot_param para = {
             .accelerationDeviation = 5,
             .rotationalAccelerationDeviation = 0.01,
-            .survivalProbability = 0.999,
-            .meanBirths = 0.001,
+            .survivalProbability = 0.9999,
+            .meanBirths = 0.1,
             .measurementVariance = measurementDeviation*measurementDeviation,
             .meanMeasurements = 25,
-            .meanClutter = 5,
+            .meanClutter = 2,
             .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(25, 25),
             .priorTurningRateDeviation = 0.01,
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
             .priorExtentDegreeFreedom = 30,
             .degreeFreedomPrediction = 2000,
-            .numParticles = 300,
+            .numParticles = 200,
             .regularizationDeviation = 0,
             .detectionThreshold = 0.5,
             .thresholdPruning = 1e-3,
