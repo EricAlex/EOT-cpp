@@ -151,15 +151,15 @@ void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vecto
     clutteredMeasurements.resize(numSteps);
     float mLengthStep(0.5);
     vector<Eigen::Vector2d> tmpPolygon;
-    tmpPolygon.push_back(Eigen::Vector2d(-1, 2)); 
-    tmpPolygon.push_back(Eigen::Vector2d(1, 2));
-    tmpPolygon.push_back(Eigen::Vector2d(1, -2)); 
+    // tmpPolygon.push_back(Eigen::Vector2d(-1, 2));
+    // tmpPolygon.push_back(Eigen::Vector2d(1, 2));
+    tmpPolygon.push_back(Eigen::Vector2d(1, -2));
     tmpPolygon.push_back(Eigen::Vector2d(-1, -2));
     tmpPolygon.push_back(Eigen::Vector2d(-1, 2));
     double rot_ang(3*M_PI/180);
-    // rot_ang = 0;
+    rot_ang = 0;
     for(size_t s=0; s<numSteps; ++s){
-        rot_ang += M_PI/180/5;
+        // rot_ang += M_PI/180/5;
         Eigen::Matrix2d rot_mat;
         rot_mat << cos(rot_ang), -sin(rot_ang),
                     sin(rot_ang), cos(rot_ang);
@@ -192,18 +192,26 @@ int main(void){
         .grid_res = 0.5
     };
     double meanTargetDimension = 3;
-    double measurementDeviation = 5*meanTargetDimension/60;
+    double measurementDeviation = meanTargetDimension/30;
     // double measurementDeviation = grid_parameters.grid_res;
     eot_param para = {
         .accelerationDeviation = 1,
-        .rotationalAccelerationDeviation = 15*M_PI/180,
+        #if STATIC_SIMULATION
+            .rotationalAccelerationDeviation = 20*M_PI/180,
+        #else
+            .rotationalAccelerationDeviation = M_PI/180,
+        #endif
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .measurementVariance = measurementDeviation*measurementDeviation,
         .meanMeasurements = 30,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
-        .priorTurningRateDeviation = 20*M_PI/180,
+        #if STATIC_SIMULATION
+            .priorTurningRateDeviation = 20*M_PI/180,
+        #else
+            .priorTurningRateDeviation = M_PI/180,
+        #endif
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
@@ -368,10 +376,10 @@ void loadData(const boost::filesystem::path& pcd_path,
 int main(int argc, char *argv[]){
     if((argc>2)&&(strlen(argv[1])==2)&&(argv[1][0]=='-')&&(argv[1][1]=='i')){
         double meanTargetDimension = 3;
-        double measurementDeviation = 0.5;
+        double measurementDeviation = 0.1;
         eot_param para = {
-            .accelerationDeviation = 5,
-            .rotationalAccelerationDeviation = 0.01,
+            .accelerationDeviation = 10,
+            .rotationalAccelerationDeviation = 0.003,
             .survivalProbability = 0.9999,
             .meanBirths = 0.1,
             .measurementVariance = measurementDeviation*measurementDeviation,

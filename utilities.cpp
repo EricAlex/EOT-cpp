@@ -171,6 +171,7 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
                                           const double gate_ratio,
                                           const Eigen::Vector2d& M, 
                                           const double sd_noise){
+    double base_inner_weight(0.4);
     double width(eigenvalues(0)), length(eigenvalues(1));
     double radius(gate_ratio * sqrt(std::pow(length, 2) + std::pow(width, 2)));
     if((M(0)<(x.p1-radius))||(M(0)>(x.p1+radius))||(M(1)<(x.p2-radius))||(M(1)>(x.p2+radius))){
@@ -194,23 +195,19 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
         double Q1 = Q_function(d1/sd_noise);
         double Q2 = Q_function(d2/sd_noise);
         double f1(0), f2(0);
+        f1 = fabs(Q1 - Q2);
         if((width>d1)&&(width>d2)){
-            f1 = 1.0 - Q1 - Q2;
-        }else if((d2>=width)&&(d2>=d1)){
-            f1 = Q1 - Q2;
-        }else if((d1>=width)&&(d1>=d2)){
-            f1 = Q2 - Q1;
+            f1 = 3*f1;
+            f1 = f1<base_inner_weight?(base_inner_weight*(1.0-Q1-Q2)):f1;
         }
         d1 = p2lDistance(P + half_l_vec + half_w_vec, P + half_l_vec - half_w_vec, M);
         d2 = p2lDistance(P - half_l_vec + half_w_vec, P - half_l_vec - half_w_vec, M);
         Q1 = Q_function(d1/sd_noise);
         Q2 = Q_function(d2/sd_noise);
+        f2 = fabs(Q1 - Q2);
         if((length>d1)&&(length>d2)){
-            f2 = 1.0 - Q1 - Q2;
-        }else if((d2>=length)&&(d2>=d1)){
-            f2 = Q1 - Q2;
-        }else if((d1>=length)&&(d1>=d2)){
-            f2 = Q2 - Q1;
+            f2 = 3*f2;
+            f2 = f2<base_inner_weight?(base_inner_weight*(1.0-Q1-Q2)):f2;
         }
         return f1*f2/(length*width);
     }

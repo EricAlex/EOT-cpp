@@ -123,7 +123,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1.2);
+    double sigmaRatio(1.5);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
