@@ -26,6 +26,8 @@ class utilities{
       static double sampleGamma_mv(double mean, double variance);
       static double p2lDistance(const Eigen::Vector2d& a, const Eigen::Vector2d& b, const Eigen::Vector2d& p);
       static double Q_function(const double x);
+      static double error_function(const double x);
+      static double Q_function_integral(const double x);
       static double measurement_likelihood_(const po_kinematic& x, const Eigen::Vector2d& eigenvalues, const Eigen::Matrix2d& eigenvectors, 
                                             const double gate_ratio, const Eigen::Vector2d& M, const double sd_noise);
       static bool isInPolygon(const vector<Eigen::Vector2d>& convex_hull,

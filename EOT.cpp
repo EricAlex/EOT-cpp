@@ -123,7 +123,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1.5);
+    double sigmaRatio(1.0);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -360,6 +360,27 @@ void EOT::resampleSystematic(const vector<double>& weights, vector<size_t>& inde
     }
 }
 
+void EOT::copyMat2Vec(const Eigen::Matrix2d& mat, vector<double>& vec){
+    vec[0] = mat(0, 0);
+    vec[1] = mat(0, 1);
+    vec[2] = mat(1, 0);
+    vec[3] = mat(1, 1);
+}
+void EOT::copyVec2Mat(const vector<double>& vec, Eigen::Matrix2d& mat){
+    mat(0, 0) = vec[0];
+    mat(0, 1) = vec[1];
+    mat(1, 0) = vec[2];
+    mat(1, 1) = vec[3];
+}
+void EOT::copyEvec2Vec(const Eigen::Vector2d& evec, vector<double>& vec){
+    vec[0] = evec(0);
+    vec[1] = evec(1);
+}
+void EOT::copyVec2Evec(const vector<double>& vec, Eigen::Vector2d& evec){
+    evec(0) = vec[0];
+    evec(1) = vec[1];
+}
+
 void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const int target){
     int numMeasurements = logWeights_m_p.size();
     vector<double> tmpWeights_p(m_param_.numParticles);
@@ -391,7 +412,7 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         double dead = 1 - m_currentExistences_t_[target];
         m_currentExistences_t_[target] = alive/(dead+alive);
     }
-    if(m_currentExistences_t_[target] != 0){
+    if(m_currentExistences_t_[target] >= m_param_.thresholdPruning){
         double max_tmpWeights_val(0.0);
         if(tmpWeights_p.size()>0){
             max_tmpWeights_val = tmpWeights_p[max_val_idx];
@@ -425,22 +446,22 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         vector<size_t> indexes(m_param_.numParticles);
         resampleSystematic(tmpWeights_p, indexes);
         vector<po_kinematic> tmpKinematic_p(m_param_.numParticles);
-        vector<Eigen::Matrix2d> tmpExtent_p(m_param_.numParticles);
-        vector<Eigen::Vector2d> tmpEigenvalues_p(m_param_.numParticles);
-        vector<Eigen::Matrix2d> tmpEigenvectors_p(m_param_.numParticles);
+        vector< vector<double> > tmpExtent_p(m_param_.numParticles, vector<double>(4, 0.0));
+        vector< vector<double> > tmpEigenvalues_p(m_param_.numParticles, vector<double>(2, 0.0));
+        vector< vector<double> > tmpEigenvectors_p(m_param_.numParticles, vector<double>(4, 0.0));
         #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpKinematic_p[p] = m_currentParticlesKinematic_t_p_[target][p];
-            tmpExtent_p[p] = m_currentParticlesExtent_t_p_[target][p].e;
-            tmpEigenvalues_p[p] = m_currentParticlesExtent_t_p_[target][p].eigenvalues;
-            tmpEigenvectors_p[p] = m_currentParticlesExtent_t_p_[target][p].eigenvectors;
+            copyMat2Vec(m_currentParticlesExtent_t_p_[target][p].e, tmpExtent_p[p]);
+            copyEvec2Vec(m_currentParticlesExtent_t_p_[target][p].eigenvalues, tmpEigenvalues_p[p]);
+            copyMat2Vec(m_currentParticlesExtent_t_p_[target][p].eigenvectors, tmpEigenvectors_p[p]);
         }
         #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
             m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
-            m_currentParticlesExtent_t_p_[target][p].e = tmpExtent_p[indexes[p]];
-            m_currentParticlesExtent_t_p_[target][p].eigenvalues = tmpEigenvalues_p[indexes[p]];
-            m_currentParticlesExtent_t_p_[target][p].eigenvectors = tmpEigenvectors_p[indexes[p]];
+            copyVec2Mat(tmpExtent_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].e);
+            copyVec2Evec(tmpEigenvalues_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvalues);
+            copyVec2Mat(tmpEigenvectors_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvectors);
             m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
             m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
         }

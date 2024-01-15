@@ -53,6 +53,10 @@ class EOT{
         bool getPromisingNewTargets(const vector<measurement>& ori_measurements, 
                                     vector<size_t>& newIndexes, 
                                     vector<measurement>& ordered_measurements);
+        void copyMat2Vec(const Eigen::Matrix2d& mat, vector<double>& vec);
+        void copyVec2Mat(const vector<double>& vec, Eigen::Matrix2d& mat);
+        void copyEvec2Vec(const Eigen::Vector2d& evec, vector<double>& vec);
+        void copyVec2Evec(const vector<double>& vec, Eigen::Vector2d& evec);
 	private:
         steady_clock::time_point _time_start;
         steady_clock::time_point _time_finish;

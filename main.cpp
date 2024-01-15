@@ -157,9 +157,9 @@ void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vecto
     tmpPolygon.push_back(Eigen::Vector2d(-1, -2));
     tmpPolygon.push_back(Eigen::Vector2d(-1, 2));
     double rot_ang(3*M_PI/180);
-    rot_ang = 0;
+    // rot_ang = 0;
     for(size_t s=0; s<numSteps; ++s){
-        // rot_ang += M_PI/180/5;
+        rot_ang += M_PI/180/5;
         Eigen::Matrix2d rot_mat;
         rot_mat << cos(rot_ang), -sin(rot_ang),
                     sin(rot_ang), cos(rot_ang);
@@ -181,7 +181,7 @@ void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vecto
 }
 #if SIMULATION
 int main(void){
-    #define STATIC_SIMULATION false
+    #define STATIC_SIMULATION true
     #define EXPORT_FIGURE	false
     // parameters for simulations
     grid_para grid_parameters = {

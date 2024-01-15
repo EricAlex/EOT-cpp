@@ -8,6 +8,9 @@
         "*.ipp": "cpp",
         "ostream": "cpp",
         "numericaldiff": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "*.tcc": "cpp",
+        "string_view": "cpp",
+        "tuple": "cpp"
     }
 }
