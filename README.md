@@ -17,13 +17,25 @@ make
 
 ![static rectangular object](img/static.gif)
 
+Partially visible: 
+
+![static rectangular object (partially visible)](img/part_static.gif)
+
 #### Constant turning rate
 
 ![constant turning rate](img/constant_turning_rate.gif)
 
+Partially visible: 
+
+![constant turning rate (partially visible)](img/part_crot.gif)
+
 #### Accelerated turning rate
 
 ![accelerated turning rate](img/accelerated_turning_rate.gif)
+
+Partially visible: 
+
+![accelerated turning rate (partially visible)](img/part_arot.gif)
 
 ### Multiple rectangular objects moving with random acceleration
 
