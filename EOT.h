@@ -14,14 +14,20 @@
 
 #include "globaldef.h"
 #include "utilities.h"
-#include "dbscan.h"
+#include "third_party/dbscan.h"
+#include "third_party/easylogging++.h"
 
 using namespace std;
 using namespace std::chrono;
 
 class EOT{
     public:
-        EOT(){}
+        EOT(){
+            el::Configurations conf("logger.conf");
+            el::Loggers::reconfigureLogger("default", conf);
+            el::Loggers::reconfigureAllLoggers(conf);
+            m_defaultLogger_ = el::Loggers::getLogger("default");
+        }
 
     	~EOT(){}
 
@@ -60,6 +66,7 @@ class EOT{
 	private:
         steady_clock::time_point _time_start;
         steady_clock::time_point _time_finish;
+        el::Logger* m_defaultLogger_;
         grid_para m_grid_para_;
         double m_grid_resolution_reciprocal_;
         uint32_t m_rows_;

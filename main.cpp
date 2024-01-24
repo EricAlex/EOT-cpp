@@ -12,6 +12,9 @@
 #include "globaldef.h"
 #include "utilities.h"
 #include "EOT.h"
+#include "third_party/easylogging++.h"
+
+INITIALIZE_EASYLOGGINGPP
 
 using namespace matplot;
 using namespace std;
@@ -216,7 +219,7 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
         .degreeFreedomPrediction = 2000,
-        .numParticles = 1000,
+        .numParticles = 3000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
@@ -250,10 +253,9 @@ int main(void){
     auto h = matplot::figure();
     h->size(600, 600);
     for(size_t s=0; s<numSteps; ++s){
-        cout<<"Number of measurements: "<<clutteredMeasurements[s].size()<<endl;
         vector<PO> potential_objects_out;
         sim_eot.eot_track(clutteredMeasurements[s], grid_parameters, scanTime, s, potential_objects_out);
-        cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
+        // cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
         // plot result
         vector<double> x, y, size;
         for(size_t m=0; m<clutteredMeasurements[s].size(); ++m){

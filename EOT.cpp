@@ -474,6 +474,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                     const uint64_t frame_idx, 
                     vector<PO>& potential_objects_out){
     timer_start();
+    m_defaultLogger_->info("%v , start eot.", frame_idx);
     // init configuration parameters
     Eigen::Matrix2d totalCovariance = m_param_.meanPriorExtent*m_param_.meanPriorExtent;
     totalCovariance.array() += m_param_.measurementVariance;
@@ -491,7 +492,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
 
     // perform prediction step
     if(!performPrediction(delta_time)){
-        cout<<m_err_str_<<endl;
+        m_defaultLogger_->error(m_err_str_);
         return;
     }
     double exp_minus_meanMeasurements = exp(-double(m_param_.meanMeasurements));
@@ -690,10 +691,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     }
 
     #if DEBUG
-        for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
-            cout<<"\t"<<m_currentExistences_t_[t];
-        }
-        cout<<endl;
     #endif
 
     // perform pruning
@@ -754,5 +751,5 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     // m_currentPotentialObjects_t_.clear();
 
     timer_stop();
-    cout<<"EOT done, costs "<<getTimer_millisec()<<" ms."<<endl;
+    m_defaultLogger_->info("%v , EOT done, costs %v ms.", frame_idx, getTimer_millisec());
 }
