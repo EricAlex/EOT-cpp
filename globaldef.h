@@ -3,7 +3,6 @@
 
 using namespace std;
 
-#define DEBUG	true
 #define SIMULATION	true
 
 #define LIDAR_ANGULAR_RESOLUTION	0.0013962634 // in radian

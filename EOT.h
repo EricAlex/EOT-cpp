@@ -17,6 +17,8 @@
 #include "third_party/dbscan.h"
 #include "third_party/easylogging++.h"
 
+#define DEBUG	false
+
 using namespace std;
 using namespace std::chrono;
 
@@ -81,6 +83,5 @@ class EOT{
         vector<double> m_currentExistences_t_;
         vector< vector<po_extent> > m_currentParticlesExtent_t_p_;
         vector<PO> m_currentPotentialObjects_t_;
-        vector<po_kinematic> m_currentKinematic_t_;
-        vector<po_extent> m_currentExtent_t_;
+        vector<size_t> m_currentMeanMeasurements_t_;
 };

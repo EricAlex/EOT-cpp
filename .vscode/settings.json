@@ -11,6 +11,7 @@
         "random": "cpp",
         "*.tcc": "cpp",
         "string_view": "cpp",
-        "tuple": "cpp"
+        "tuple": "cpp",
+        "functional": "cpp"
     }
 }

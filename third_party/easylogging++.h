@@ -13,6 +13,7 @@
 // user defined
 #define ELPP_NO_DEFAULT_LOG_FILE
 #define ELPP_FRESH_LOG_FILE
+#define ELPP_STL_LOGGING
 
 #ifndef EASYLOGGINGPP_H
 #define EASYLOGGINGPP_H

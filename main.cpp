@@ -184,7 +184,7 @@ void generateClutteredMeasurements_static_test(const vector< vector<Eigen::Vecto
 }
 #if SIMULATION
 int main(void){
-    #define STATIC_SIMULATION true
+    #define STATIC_SIMULATION false
     #define EXPORT_FIGURE	false
     // parameters for simulations
     grid_para grid_parameters = {
@@ -207,7 +207,7 @@ int main(void){
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .measurementVariance = measurementDeviation*measurementDeviation,
-        .meanMeasurements = 30,
+        .meanMeasurements = 20,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         #if STATIC_SIMULATION
@@ -218,7 +218,7 @@ int main(void){
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
-        .degreeFreedomPrediction = 2000,
+        .degreeFreedomPrediction = 5000,
         .numParticles = 3000,
         .regularizationDeviation = 0,
         .detectionThreshold = 0.5,

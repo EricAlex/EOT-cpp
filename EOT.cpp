@@ -83,10 +83,6 @@ bool EOT::performPrediction(const double delta_time){
                 m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
                 m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
                 m_currentParticlesKinematic_t_p_[t][p].t += delta_time*utilities::sampleGaussian(0, m_param_.rotationalAccelerationDeviation);
-                // // predict mean number of measurments with shape extention
-                // m_currentParticlesKinematic_t_p_[t][p].s = utilities::mean_number_of_measurements(m_currentParticlesExtent_t_p_[t][p].eigenvalues, m_grid_para_.grid_res);
-                // assign default mean number of measurments
-                m_currentParticlesKinematic_t_p_[t][p].s = m_param_.meanMeasurements;
             }
         }
         for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
@@ -123,7 +119,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1.0);
+    double sigmaRatio(1.3);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -148,6 +144,10 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
                 }
             }
         }
+    }
+
+    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
+        ordered_measurements.push_back(measurements[*it]);
     }
 
     // #if SIMULATION
@@ -249,10 +249,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     //     newIndexes.push_back(ordered_measurements.size()-1);
     // }
     // #endif
-
-    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
-        ordered_measurements.push_back(measurements[*it]);
-    }
 
     return true;
 }
@@ -400,10 +396,6 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
             max_val_idx = p;
         }
     }
-    // m_currentKinematic_t_[target] = m_currentParticlesKinematic_t_p_[target][max_val_idx];
-    // m_currentExtent_t_[target].e = m_currentParticlesExtent_t_p_[target][max_val_idx].e;
-    // m_currentExtent_t_[target].eigenvalues = m_currentParticlesExtent_t_p_[target][max_val_idx].eigenvalues;
-    // m_currentExtent_t_[target].eigenvectors = m_currentParticlesExtent_t_p_[target][max_val_idx].eigenvectors;
     double aliveUpdate = std::accumulate(exp_tmpWeights_p.cbegin(), exp_tmpWeights_p.cend(), 0.0)/exp_tmpWeights_p.size();
     if(isinf(aliveUpdate)){
         m_currentExistences_t_[target] = 1;
@@ -426,22 +418,6 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpWeights_p[p] = tmpWeights_p[p]/tmpSum;
         }
-
-        // po_kinematic sum_kinematic = {0, 0, 0, 0, 0, 0};
-        // m_currentKinematic_t_[target] = sum_kinematic;
-        // m_currentExtent_t_[target].e = (Eigen::Matrix2d() << 0, 0, 0, 0).finished();
-        // for(size_t p=0; p<m_param_.numParticles; ++p){
-        //     m_currentKinematic_t_[target].p1 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].p1;
-        //     m_currentKinematic_t_[target].p2 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].p2;
-        //     m_currentKinematic_t_[target].v1 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].v1;
-        //     m_currentKinematic_t_[target].v2 += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].v2;
-        //     m_currentKinematic_t_[target].t += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].t;
-        //     m_currentKinematic_t_[target].s += tmpWeights_p[p]*m_currentParticlesKinematic_t_p_[target][p].s;
-        //     m_currentExtent_t_[target].e += tmpWeights_p[p]*m_currentParticlesExtent_t_p_[target][p].e;
-        // }
-        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentExtent_t_[target].e);
-        // m_currentExtent_t_[target].eigenvalues = eigensolver.eigenvalues();
-        // m_currentExtent_t_[target].eigenvectors = eigensolver.eigenvectors();
 
         vector<size_t> indexes(m_param_.numParticles);
         resampleSystematic(tmpWeights_p, indexes);
@@ -474,7 +450,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                     const uint64_t frame_idx, 
                     vector<PO>& potential_objects_out){
     timer_start();
-    m_defaultLogger_->info("%v , start eot.", frame_idx);
+    m_defaultLogger_->info("frame id: %v , EOT start.", frame_idx);
     // init configuration parameters
     Eigen::Matrix2d totalCovariance = m_param_.meanPriorExtent*m_param_.meanPriorExtent;
     totalCovariance.array() += m_param_.measurementVariance;
@@ -495,9 +471,11 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_defaultLogger_->error(m_err_str_);
         return;
     }
-    double exp_minus_meanMeasurements = exp(-double(m_param_.meanMeasurements));
+    #if DEBUG
+        m_defaultLogger_->info("m_currentExistences_t_: %v : %v ", m_currentExistences_t_.size(), m_currentExistences_t_);
+    #endif
     for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
-        double currentAlive = m_currentExistences_t_[t]*exp_minus_meanMeasurements;
+        double currentAlive = m_currentExistences_t_[t]*exp(-double(m_currentMeanMeasurements_t_[t]));
         double currentDead = 1 - m_currentExistences_t_[t];
         m_currentExistences_t_[t] = currentAlive/(currentDead+currentAlive);
     }
@@ -515,10 +493,14 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_currentLabels_t_.push_back(label_n);
         newIndexes_map[newIndexes[i]] = true;
     }
+    #if DEBUG
+        m_defaultLogger_->info("newIndexes: %v : %v", newIndexes.size(), newIndexes);
+    #endif
 
     // initialize belief propagation (BP) message passing
+    double exp_minus_meanMeasurements = exp(-double(m_param_.meanMeasurements));
     double init_new_existence = m_param_.meanBirths * exp_minus_meanMeasurements/(m_param_.meanBirths * exp_minus_meanMeasurements +1);
-    vector< vector<double> > newWeights_t_p(numNew, vector<double>(m_param_.numParticles));
+    vector< vector<double> > newWeights_t_p(numNew, vector<double>(m_param_.numParticles, 0.0));
     Eigen::Matrix2d proposalCovariance = 2 * totalCovariance;
     Eigen::Matrix2d proposalCovariance_sqrt = utilities::sqrtm(proposalCovariance);
     for(size_t t=0; t<numNew; ++t){
@@ -540,8 +522,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_currentParticlesExtent_t_p_.push_back(extent_p);
         m_currentExistences_t_.push_back(init_new_existence);
     }
-    m_currentKinematic_t_.resize(m_currentExistences_t_.size());
-    m_currentExtent_t_.resize(m_currentExistences_t_.size());
     vector< vector<double> > currentExistencesExtrinsic_m_t(numMeasurements, m_currentExistences_t_);
     vector< vector< vector<double> > > weightsExtrinsic_t_m_p(numLegacy, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
     vector< vector< vector<double> > > weightsExtrinsicNew_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
@@ -549,6 +529,9 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     vector< vector< vector<double> > > likelihoodNew1_t_m_p(numNew, vector< vector<double> >(numMeasurements, vector<double>(m_param_.numParticles, nanValue)));
 
     for(size_t outer=0; outer<m_param_.numOuterIterations; ++outer){
+        #if DEBUG
+            m_defaultLogger_->info("Iterations: %v / %v", outer+1, m_param_.numOuterIterations);
+        #endif
         // perform one BP message passing iteration for each measurement
         unordered_map<uint32_t, vector<double>> outputDA;
         unordered_map<uint32_t, unordered_map<size_t, size_t> > targetIndexes;
@@ -621,6 +604,9 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             vector<double> tempOutDA;
             dataAssociationBP(inputDA, tempOutDA);
             outputDA[m] = tempOutDA;
+            #if DEBUG
+                m_defaultLogger_->info("m: %v, tempOutDA: %v : %v", m, tempOutDA.size(), tempOutDA);
+            #endif
         }
 
         // perform update step for legacy targets
@@ -656,13 +642,14 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                 }
                 for(int m=0; m<=t; ++m){
                     double outputTmpDA = outputDA[m][targetIndexes[m][t]];
+                    bool m_not_equals_t = (m != t);
                     #pragma omp parallel for
                     for(size_t p=0; p<m_param_.numParticles; ++p){
                         double currentWeights = likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
                         if(!isinf(outputTmpDA)){
                             currentWeights *= outputTmpDA;
                         }
-                        if(m != t){
+                        if(m_not_equals_t){
                             currentWeights += 1;
                         }
                         weights_m_p[m][p] = log(currentWeights);
@@ -690,9 +677,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         }
     }
 
-    #if DEBUG
-    #endif
-
     // perform pruning
     for(size_t t=0; t<m_currentExistences_t_.size();){
         if(m_currentExistences_t_[t] < m_param_.thresholdPruning){
@@ -700,13 +684,12 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             m_currentParticlesKinematic_t_p_.erase(m_currentParticlesKinematic_t_p_.begin()+t);
             m_currentParticlesExtent_t_p_.erase(m_currentParticlesExtent_t_p_.begin()+t);
             m_currentLabels_t_.erase(m_currentLabels_t_.begin()+t);
-            m_currentKinematic_t_.erase(m_currentKinematic_t_.begin()+t);
-            m_currentExtent_t_.erase(m_currentExtent_t_.begin()+t);
         }else{
             t++;
         }
     }
 
+    m_currentMeanMeasurements_t_.resize(m_currentExistences_t_.size());
     // perform estimation
     m_currentPotentialObjects_t_.resize(0);
     for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
@@ -721,7 +704,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                 sum_kinematic.v1 += m_currentParticlesKinematic_t_p_[t][p].v1;
                 sum_kinematic.v2 += m_currentParticlesKinematic_t_p_[t][p].v2;
                 sum_kinematic.t += m_currentParticlesKinematic_t_p_[t][p].t;
-                sum_kinematic.s += m_currentParticlesKinematic_t_p_[t][p].s;
                 sum_e += m_currentParticlesExtent_t_p_[t][p].e;
             }
             tmpDetectedPO.kinematic.p1 = sum_kinematic.p1/double(m_param_.numParticles);
@@ -729,27 +711,23 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             tmpDetectedPO.kinematic.v1 = sum_kinematic.v1/double(m_param_.numParticles);
             tmpDetectedPO.kinematic.v2 = sum_kinematic.v2/double(m_param_.numParticles);
             tmpDetectedPO.kinematic.t = sum_kinematic.t/double(m_param_.numParticles);
-            tmpDetectedPO.kinematic.s = sum_kinematic.s/double(m_param_.numParticles);
             tmpDetectedPO.extent.e = sum_e/double(m_param_.numParticles);
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(tmpDetectedPO.extent.e);
             tmpDetectedPO.extent.eigenvalues = eigensolver.eigenvalues();
             tmpDetectedPO.extent.eigenvectors = eigensolver.eigenvectors();
-            // tmpDetectedPO.kinematic = m_currentKinematic_t_[t];
-            // tmpDetectedPO.extent.e = m_currentExtent_t_[t].e;
-            // tmpDetectedPO.extent.e = m_currentExtent_t_[t].e;
-            // tmpDetectedPO.extent.eigenvalues = m_currentExtent_t_[t].eigenvalues;
-            // tmpDetectedPO.extent.eigenvectors = m_currentExtent_t_[t].eigenvectors;
             m_currentPotentialObjects_t_.push_back(tmpDetectedPO);
             potential_objects_out.push_back(tmpDetectedPO);
+            m_currentMeanMeasurements_t_[t] = utilities::mean_number_of_measurements(tmpDetectedPO.extent.eigenvalues, m_grid_para_.grid_res);
+        }else{
+            Eigen::Matrix2d sum_e = (Eigen::Matrix2d() << 0, 0, 0, 0).finished();
+            for(size_t p=0; p<m_param_.numParticles; ++p){
+                sum_e += m_currentParticlesExtent_t_p_[t][p].e;
+            }
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(sum_e/double(m_param_.numParticles));
+            m_currentMeanMeasurements_t_[t] = utilities::mean_number_of_measurements(eigensolver.eigenvalues(), m_grid_para_.grid_res);
         }
     }
 
-    // m_currentExistences_t_.clear();
-    // m_currentParticlesKinematic_t_p_.clear();
-    // m_currentParticlesExtent_t_p_.clear();
-    // m_currentLabels_t_.clear();
-    // m_currentPotentialObjects_t_.clear();
-
     timer_stop();
-    m_defaultLogger_->info("%v , EOT done, costs %v ms.", frame_idx, getTimer_millisec());
+    m_defaultLogger_->info("frame id: %v , EOT done, costs %v ms.\n", frame_idx, getTimer_millisec());
 }

@@ -150,15 +150,18 @@ double utilities::sampleGamma_mv(double mean, double variance){
 
 size_t utilities::mean_number_of_measurements(const Eigen::Vector2d& eigenvalues,
                                               float grid_resolution){
-    return size_t((eigenvalues(0)+eigenvalues(1))/(2*grid_resolution)) + size_t(eigenvalues(0)*eigenvalues(1)/(grid_resolution*grid_resolution))/20 + 2;
+    return size_t((eigenvalues(0)+eigenvalues(1))/(grid_resolution)) + size_t(eigenvalues(0)*eigenvalues(1)/(grid_resolution*grid_resolution))/4 + 1;
 }
 
 double utilities::p2lDistance(const Eigen::Vector2d& a, 
                               const Eigen::Vector2d& b, 
                               const Eigen::Vector2d& p){
-    Eigen::Vector2d v1 = b - a;
-    Eigen::Vector2d v2 = p - b;
-    return v2.norm()*sin(acos(fabs(v1.dot(v2))/(v1.norm()*v2.norm())));
+    double delta_y = b(1) - a(1);
+    double delta_x = b(0) - a(0);
+    double numerator = fabs(delta_y*p(0) - delta_x*p(1) + b(0)*a(1) - b(1)*a(0));
+    double denominator = sqrt(delta_y*delta_y + delta_x*delta_x);
+    return numerator / denominator;
+
 }
 
 double utilities::Q_function(const double x){
@@ -205,17 +208,17 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
         double Q1 = Q_function(d1/sd_noise);
         double Q2 = Q_function(d2/sd_noise);
         double f1(0), f2(0);
-        f1 = fabs(Q1 - Q2);
+        f1 = inner_base_weight*fabs(Q1 - Q2);
         if((width>d1)&&(width>d2)){
-            f1 += inner_base_weight;
+            f1 = fabs(Q1 - Q2) + inner_base_weight;
         }
         d1 = p2lDistance(P + half_l_vec + half_w_vec, P + half_l_vec - half_w_vec, M);
         d2 = p2lDistance(P - half_l_vec + half_w_vec, P - half_l_vec - half_w_vec, M);
         Q1 = Q_function(d1/sd_noise);
         Q2 = Q_function(d2/sd_noise);
-        f2 = fabs(Q1 - Q2);
+        f2 = inner_base_weight*fabs(Q1 - Q2);
         if((length>d1)&&(length>d2)){
-            f2 += inner_base_weight;
+            f2 = fabs(Q1 - Q2) + inner_base_weight;
         }
         return f1*f2/(length*width);
     }
