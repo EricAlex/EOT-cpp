@@ -102,8 +102,8 @@ void generateTargetOutline(const Eigen::Vector4d& tracks, const Eigen::Matrix2d&
             + sqrt(measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
         measurements.push_back(measurementsTmp1);
     }
-    measurements.push_back(Eigen::Vector2d(tracks(0), tracks(1))
-        + sqrt(measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1)));
+    // measurements.push_back(Eigen::Vector2d(tracks(0), tracks(1))
+    //     + sqrt(measurementVariance)*Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1)));
 }
 
 void generateClutteredMeasurements(const vector< vector<Eigen::Vector4d> >& targetTracks, 
@@ -207,7 +207,7 @@ int main(void){
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .measurementVariance = measurementDeviation*measurementDeviation,
-        .meanMeasurements = 20,
+        .meanMeasurements = 25,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         #if STATIC_SIMULATION
@@ -218,9 +218,9 @@ int main(void){
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
-        .degreeFreedomPrediction = 5000,
-        .numParticles = 3000,
-        .regularizationDeviation = 0,
+        .degreeFreedomPrediction = 1000,
+        .numParticles = 2000,
+        .regularizationDeviation = meanTargetDimension/5,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
         .numOuterIterations = 2

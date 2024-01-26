@@ -119,7 +119,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1.3);
+    double sigmaRatio(1.5);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -144,10 +144,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
                 }
             }
         }
-    }
-
-    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
-        ordered_measurements.push_back(measurements[*it]);
     }
 
     // #if SIMULATION
@@ -249,6 +245,10 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     //     newIndexes.push_back(ordered_measurements.size()-1);
     // }
     // #endif
+
+    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
+        ordered_measurements.push_back(measurements[*it]);
+    }
 
     return true;
 }
@@ -474,8 +474,10 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     #if DEBUG
         m_defaultLogger_->info("m_currentExistences_t_: %v : %v ", m_currentExistences_t_.size(), m_currentExistences_t_);
     #endif
+    double exp_minus_meanMeasurements = exp(-double(m_param_.meanMeasurements));
     for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
         double currentAlive = m_currentExistences_t_[t]*exp(-double(m_currentMeanMeasurements_t_[t]));
+        // double currentAlive = m_currentExistences_t_[t]*exp_minus_meanMeasurements;
         double currentDead = 1 - m_currentExistences_t_[t];
         m_currentExistences_t_[t] = currentAlive/(currentDead+currentAlive);
     }
@@ -498,7 +500,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     #endif
 
     // initialize belief propagation (BP) message passing
-    double exp_minus_meanMeasurements = exp(-double(m_param_.meanMeasurements));
     double init_new_existence = m_param_.meanBirths * exp_minus_meanMeasurements/(m_param_.meanBirths * exp_minus_meanMeasurements +1);
     vector< vector<double> > newWeights_t_p(numNew, vector<double>(m_param_.numParticles, 0.0));
     Eigen::Matrix2d proposalCovariance = 2 * totalCovariance;
