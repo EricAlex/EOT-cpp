@@ -279,6 +279,10 @@ void EOT::dataAssociationBP(const vector< Eigen::Vector2d >& inputDA, vector<dou
         }
         outputDA[max_val_idx] = 1.0;
     }
+    #if DEBUG
+        m_defaultLogger_->info("\ttempDA: %v : %v", tempDA.size(), tempDA);
+        m_defaultLogger_->info("\toutputDA: %v : %v", outputDA.size(), outputDA);
+    #endif
 }
 
 void EOT::getWeightsUnknown(const vector< vector<double> >& logWeights_m_p, 
@@ -300,12 +304,6 @@ void EOT::getWeightsUnknown(const vector< vector<double> >& logWeights_m_p,
         tmpWeights_p[p] = tmpSum;
         exp_tmpWeights_p[p] = exp(tmpWeights_p[p]);
     }
-    size_t max_val_idx(0);
-    for(size_t p=0; p<m_param_.numParticles; ++p){
-        if(tmpWeights_p[p] > tmpWeights_p[max_val_idx]){
-            max_val_idx = p;
-        }
-    }
     double aliveUpdate = std::accumulate(exp_tmpWeights_p.cbegin(), exp_tmpWeights_p.cend(), 0.0)/exp_tmpWeights_p.size();
     if(isinf(aliveUpdate)){
         updatedExistence = 1;
@@ -314,9 +312,11 @@ void EOT::getWeightsUnknown(const vector< vector<double> >& logWeights_m_p,
         double dead = (1 - oldExistence);
         updatedExistence = alive / (dead + alive);
     }
-    double max_tmpWeights_val(0.0);
-    if(tmpWeights_p.size()>0){
-        max_tmpWeights_val = tmpWeights_p[max_val_idx];
+    double max_tmpWeights_val = m_param_.numParticles>0?tmpWeights_p[0]:0;
+    for(size_t p=0; p<m_param_.numParticles; ++p){
+        if(tmpWeights_p[p] > max_tmpWeights_val){
+            max_tmpWeights_val = tmpWeights_p[p];
+        }
     }
     #pragma omp parallel for
     for(size_t p=0; p<m_param_.numParticles; ++p){
@@ -603,11 +603,11 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             }
             targetIndexes[m] = targetIndexesCurrent;
             vector<double> tempOutDA;
+            #if DEBUG
+                m_defaultLogger_->info("m: %v", m);
+            #endif
             dataAssociationBP(inputDA, tempOutDA);
             outputDA[m] = tempOutDA;
-            #if DEBUG
-                m_defaultLogger_->info("m: %v, tempOutDA: %v : %v", m, tempOutDA.size(), tempOutDA);
-            #endif
         }
 
         // perform update step for legacy targets
