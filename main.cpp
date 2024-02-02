@@ -207,7 +207,7 @@ int main(void){
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .measurementVariance = measurementDeviation*measurementDeviation,
-        .meanMeasurements = 25,
+        .meanMeasurements = 20,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         #if STATIC_SIMULATION
