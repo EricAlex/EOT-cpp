@@ -29,6 +29,10 @@ class EOT{
             el::Loggers::reconfigureLogger("default", conf);
             el::Loggers::reconfigureAllLoggers(conf);
             m_defaultLogger_ = el::Loggers::getLogger("default");
+
+            m_omp_numProcs_ = omp_get_num_procs()*3/4;
+            m_omp_numProcs_ = m_omp_numProcs_>1?m_omp_numProcs_:2;
+            omp_set_num_threads(m_omp_numProcs_);
         }
 
     	~EOT(){}
@@ -66,6 +70,7 @@ class EOT{
         void copyEvec2Vec(const Eigen::Vector2d& evec, vector<double>& vec);
         void copyVec2Evec(const vector<double>& vec, Eigen::Vector2d& evec);
 	private:
+        int m_omp_numProcs_;
         steady_clock::time_point _time_start;
         steady_clock::time_point _time_finish;
         el::Logger* m_defaultLogger_;
