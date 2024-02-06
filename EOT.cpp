@@ -267,7 +267,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
 void EOT::maskMeasurements4LegacyPOs(const vector<measurement>& measurements,
                                      vector< vector<size_t> >& mask_m_t,
                                      vector< vector<size_t> >& mask_t_m){
-    double radius = 7 * m_param_.meanTargetDimension;
+    double radius = 4 * m_param_.meanTargetDimension;
     size_t targetNum = m_currentAugmentedPOs_t_.size();
     size_t mNum = measurements.size();
     mask_m_t.resize(mNum);

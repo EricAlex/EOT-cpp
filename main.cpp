@@ -207,7 +207,7 @@ int main(void){
         .survivalProbability = 0.99,
         .meanBirths = 0.01,
         .measurementVariance = measurementDeviation*measurementDeviation,
-        .meanMeasurements = 20,
+        .meanMeasurements = 15,
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         #if STATIC_SIMULATION
@@ -219,7 +219,7 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
         .degreeFreedomPrediction = 1000,
-        .numParticles = 1000,
+        .numParticles = 2000,
         .regularizationDeviation = meanTargetDimension/10,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
@@ -380,21 +380,21 @@ int main(int argc, char *argv[]){
         double meanTargetDimension = 3;
         double measurementDeviation = 0.1;
         eot_param para = {
-            .accelerationDeviation = 10,
-            .rotationalAccelerationDeviation = 0.003,
-            .survivalProbability = 0.9999,
-            .meanBirths = 0.1,
+            .accelerationDeviation = 5,
+            .rotationalAccelerationDeviation = M_PI/360,
+            .survivalProbability = 0.8,
+            .meanBirths = 0.00001,
             .measurementVariance = measurementDeviation*measurementDeviation,
             .meanMeasurements = 25,
             .meanClutter = 2,
             .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(25, 25),
-            .priorTurningRateDeviation = 0.01,
+            .priorTurningRateDeviation = M_PI/360,
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
             .priorExtentDegreeFreedom = 30,
-            .degreeFreedomPrediction = 2000,
-            .numParticles = 200,
-            .regularizationDeviation = 0,
+            .degreeFreedomPrediction = 1000,
+            .numParticles = 1000,
+            .regularizationDeviation = meanTargetDimension/10,
             .detectionThreshold = 0.5,
             .thresholdPruning = 1e-3,
             .numOuterIterations = 2
@@ -414,10 +414,8 @@ int main(int argc, char *argv[]){
             uint64_t frame_idx;
             loadData(*stramIterator, Measurements, grid_parameters, scanTime, frame_idx);
 
-            cout<<"Number of measurements: "<<Measurements.size()<<endl;
             vector<PO> potential_objects_out;
             sim_eot.eot_track(Measurements, grid_parameters, scanTime, frame_idx, potential_objects_out);
-            cout<<"potential_objects_out.size(): "<<potential_objects_out.size()<<endl;
 
             pcl::PointCloud<pcl::PointXYZ>::Ptr show_cloud_M(new pcl::PointCloud<pcl::PointXYZ>);
             double step(0.1);
