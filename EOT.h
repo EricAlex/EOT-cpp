@@ -69,6 +69,9 @@ class EOT{
         void copyVec2Mat(const vector<double>& vec, Eigen::Matrix2d& mat);
         void copyEvec2Vec(const Eigen::Vector2d& evec, vector<double>& vec);
         void copyVec2Evec(const vector<double>& vec, Eigen::Vector2d& evec);
+        void maskMeasurements4LegacyPOs(const vector<measurement>& measurements,
+                                        vector< vector<size_t> >& mask_m_t,
+                                        vector< vector<size_t> >& mask_t_m);
 	private:
         int m_omp_numProcs_;
         steady_clock::time_point _time_start;
@@ -88,5 +91,6 @@ class EOT{
         vector<double> m_currentExistences_t_;
         vector< vector<po_extent> > m_currentParticlesExtent_t_p_;
         vector<PO> m_currentPotentialObjects_t_;
+        vector<PO> m_currentAugmentedPOs_t_;
         vector<size_t> m_currentMeanMeasurements_t_;
 };
