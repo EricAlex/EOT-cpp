@@ -200,7 +200,7 @@ int main(void){
     eot_param para = {
         .accelerationDeviation = 1,
         #if STATIC_SIMULATION
-            .rotationalAccelerationDeviation = 20*M_PI/180,
+            .rotationalAccelerationDeviation = 25*M_PI/180,
         #else
             .rotationalAccelerationDeviation = M_PI/180,
         #endif
@@ -211,14 +211,14 @@ int main(void){
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         #if STATIC_SIMULATION
-            .priorTurningRateDeviation = 20*M_PI/180,
+            .priorTurningRateDeviation = 25*M_PI/180,
         #else
             .priorTurningRateDeviation = M_PI/180,
         #endif
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
-        .degreeFreedomPrediction = 1000,
+        .degreeFreedomPrediction = 2000,
         .numParticles = 2000,
         .regularizationDeviation = meanTargetDimension/10,
         .detectionThreshold = 0.5,
@@ -380,20 +380,20 @@ int main(int argc, char *argv[]){
         double meanTargetDimension = 3;
         double measurementDeviation = 0.1;
         eot_param para = {
-            .accelerationDeviation = 5,
-            .rotationalAccelerationDeviation = M_PI/360,
-            .survivalProbability = 0.8,
-            .meanBirths = 0.00001,
+            .accelerationDeviation = 10,
+            .rotationalAccelerationDeviation = M_PI/1080,
+            .survivalProbability = 0.5,
+            .meanBirths = 0.2,
             .measurementVariance = measurementDeviation*measurementDeviation,
-            .meanMeasurements = 25,
-            .meanClutter = 2,
+            .meanMeasurements = 20,
+            .meanClutter = 8,
             .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(25, 25),
             .priorTurningRateDeviation = M_PI/360,
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
             .priorExtentDegreeFreedom = 30,
-            .degreeFreedomPrediction = 1000,
-            .numParticles = 1000,
+            .degreeFreedomPrediction = 2000,
+            .numParticles = 300,
             .regularizationDeviation = meanTargetDimension/10,
             .detectionThreshold = 0.5,
             .thresholdPruning = 1e-3,

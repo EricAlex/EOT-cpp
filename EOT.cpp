@@ -58,16 +58,34 @@ bool EOT::performPrediction(const double delta_time){
         &&(m_currentParticlesExtent_t_p_.size()==m_currentExistences_t_.size())){
         for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
             m_currentExistences_t_[t] *= m_param_.survivalProbability;
+            double rot_ang = m_currentAugmentedPOs_t_[t].kinematic.t * delta_time;
+            Eigen::Matrix2d rot_mat;
+            rot_mat << cos(rot_ang), sin(rot_ang),
+                        -sin(rot_ang), cos(rot_ang);
+            Eigen::MatrixXd meanExtent = (rot_mat * m_currentAugmentedPOs_t_[t].extent.e * rot_mat.transpose());
+            Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
             #pragma omp parallel for
             for(size_t p=0; p<m_param_.numParticles; ++p){
-                // prediction with rotation
-                double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
-                Eigen::Matrix2d rot_mat;
-                rot_mat << cos(rot_ang), sin(rot_ang),
-                           -sin(rot_ang), cos(rot_ang);
-                Eigen::MatrixXd meanExtent = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose());
-                Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
-                m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
+                // // prediction with rotation
+                // double rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
+                // Eigen::Matrix2d rot_mat;
+                // rot_mat << cos(rot_ang), sin(rot_ang),
+                //            -sin(rot_ang), cos(rot_ang);
+                // Eigen::MatrixXd meanExtent = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose());
+                // Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
+                // m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
+                if(p%3==0){
+                    double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
+                    Eigen::Matrix2d tmp_rot_mat;
+                    tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
+                                -sin(tmp_rot_ang), cos(tmp_rot_ang);
+                    Eigen::MatrixXd tmp_meanExtent = (tmp_rot_mat * m_currentParticlesExtent_t_p_[t][p].e * tmp_rot_mat.transpose());
+                    Eigen::MatrixXd tmp_ExtentShape = tmp_meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
+                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, tmp_ExtentShape);
+                }else{
+                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
+                }
+                // m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
                 Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
                 m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
                 m_currentParticlesExtent_t_p_[t][p].eigenvectors = eigensolver.eigenvectors();
@@ -130,7 +148,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     for(size_t m=0; m<measurements.size(); ++m){
         remainIndexes.insert(m);
     }
-    double sigmaRatio(1.5);
+    double sigmaRatio(4.0);
     vector< vector<Eigen::Vector2d> > legacyPOPolygons;
     for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
         vector<Eigen::Vector2d> tmpPolygon;
@@ -157,7 +175,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         }
     }
 
-    // #if SIMULATION
+    #if SIMULATION
     // clustering using DBSCAN
     vector<vec2d> m4Cluster;
     for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
@@ -194,68 +212,74 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
         ordered_measurements.push_back(measurement(m4Cluster[clusters[i][centor_idx]][0], m4Cluster[clusters[i][centor_idx]][1]));
         newIndexes.push_back(ordered_measurements.size()-1);
     }
-    // #else
-    // m_index_label_map_.clear();
-    // unordered_map<uint32_t, measurement> index_measurement_map;
-    // for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
-    //     uint32_t index;
-    //     coord2index(measurements[*it](0), measurements[*it](1), index);
-    //     m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
-    //     index_measurement_map[index] = measurements[*it];
-    // }
-    // vector<vector<uint32_t>> label_cluster_indices;
-    // vector<pair<size_t, size_t>> cluster_idx_size_pair;
-    // // grow seed grid
-    // uint32_t label = EOT_INIT_VAILD_GRID_LABEL;
-    // auto it = m_index_label_map_.begin();
-    // while (it != m_index_label_map_.end()) {
-    //     if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
-    //         vector<uint32_t> temp_indices;
-    //         ++label;
-    //         it->second = label;
-    //         stack<uint32_t> neighbors;
-    //         neighbors.emplace(it->first);
-    //         while (!neighbors.empty()) {
-    //             uint32_t cur_index = neighbors.top();
-    //             temp_indices.push_back(cur_index);
-    //             neighbors.pop();
-    //             find_neighbors_(cur_index, label, neighbors);
-    //         }
-    //         label_cluster_indices.push_back(temp_indices);
-    //         cluster_idx_size_pair.push_back(make_pair(label_cluster_indices.size()-1, temp_indices.size()));
-    //     }
-    //     it++;
-    // }
+    #else
+    m_index_label_map_.clear();
+    unordered_map<uint32_t, measurement> index_measurement_map;
+    for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
+        uint32_t index;
+        coord2index(measurements[*it](0), measurements[*it](1), index);
+        m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
+        index_measurement_map[index] = measurements[*it];
+    }
+    vector<vector<uint32_t>> label_cluster_indices;
+    vector<pair<size_t, size_t>> cluster_idx_size_pair;
+    // grow seed grid
+    uint32_t label = EOT_INIT_VAILD_GRID_LABEL;
+    auto it = m_index_label_map_.begin();
+    while (it != m_index_label_map_.end()) {
+        if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
+            vector<uint32_t> temp_indices;
+            ++label;
+            it->second = label;
+            stack<uint32_t> neighbors;
+            neighbors.emplace(it->first);
+            while (!neighbors.empty()) {
+                uint32_t cur_index = neighbors.top();
+                temp_indices.push_back(cur_index);
+                neighbors.pop();
+                find_neighbors_(cur_index, label, neighbors);
+            }
+            label_cluster_indices.push_back(temp_indices);
+            cluster_idx_size_pair.push_back(make_pair(label_cluster_indices.size()-1, temp_indices.size()));
+        }
+        it++;
+    }
 
-    // sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
-    // for(auto& p:cluster_idx_size_pair){
-    //     size_t m_size = label_cluster_indices[p.first].size();
-    //     vector<measurement> cluster(m_size);
-    //     measurement m_centor(0, 0);
-    //     for(size_t j=0; j<m_size; j++){
-    //         cluster[j] = index_measurement_map[label_cluster_indices[p.first][j]];
-    //         m_centor += cluster[j];
-    //     }
-    //     m_centor = m_centor/m_size;
-    //     size_t centor_idx(0);
-    //     double min_dist(numeric_limits<double>::infinity());
-    //     for(size_t j=0; j<m_size; j++){
-    //         measurement dist_vec = cluster[j] - m_centor;
-    //         double dist = dist_vec.norm();
-    //         if(dist<min_dist){
-    //             min_dist = dist;
-    //             centor_idx = j;
-    //         }
-    //     }
-    //     for(size_t j=0; j<m_size; j++){
-    //         if(j!=centor_idx){
-    //             ordered_measurements.push_back(cluster[j]);
-    //         }
-    //     }
-    //     ordered_measurements.push_back(cluster[centor_idx]);
-    //     newIndexes.push_back(ordered_measurements.size()-1);
-    // }
-    // #endif
+    sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
+    for(auto& p:cluster_idx_size_pair){
+        size_t m_size = label_cluster_indices[p.first].size();
+        vector<measurement> cluster(m_size);
+        measurement m_centor(0, 0);
+        for(size_t j=0; j<m_size; j++){
+            cluster[j] = index_measurement_map[label_cluster_indices[p.first][j]];
+            m_centor += cluster[j];
+        }
+        if(m_size<=2){
+            for(size_t j=0; j<m_size; j++){
+                ordered_measurements.push_back(cluster[j]);
+            }
+        }else{
+            m_centor = m_centor/m_size;
+            size_t centor_idx(0);
+            double min_dist(numeric_limits<double>::infinity());
+            for(size_t j=0; j<m_size; j++){
+                measurement dist_vec = cluster[j] - m_centor;
+                double dist = dist_vec.norm();
+                if(dist<min_dist){
+                    min_dist = dist;
+                    centor_idx = j;
+                }
+            }
+            for(size_t j=0; j<m_size; j++){
+                if(j!=centor_idx){
+                    ordered_measurements.push_back(cluster[j]);
+                }
+            }
+            ordered_measurements.push_back(cluster[centor_idx]);
+            newIndexes.push_back(ordered_measurements.size()-1);
+        }
+    }
+    #endif
 
     for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
         ordered_measurements.push_back(measurements[*it]);
