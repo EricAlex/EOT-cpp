@@ -204,8 +204,8 @@ int main(void){
         #else
             .rotationalAccelerationDeviation = M_PI/180,
         #endif
-        .survivalProbability = 0.99,
-        .meanBirths = 0.01,
+        .survivalProbability = 0.9,
+        .meanBirths = 0.1,
         .measurementVariance = measurementDeviation*measurementDeviation,
         .meanMeasurements = 15,
         .meanClutter = 5,
@@ -219,7 +219,7 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
         .degreeFreedomPrediction = 2000,
-        .numParticles = 2000,
+        .numParticles = 1000,
         .regularizationDeviation = meanTargetDimension/10,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,

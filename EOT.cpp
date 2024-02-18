@@ -288,6 +288,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     return true;
 }
 
+// TODO: Mask measurements for new potential targets
 void EOT::maskMeasurements4LegacyPOs(const vector<measurement>& measurements,
                                      vector< vector<size_t> >& mask_m_t,
                                      vector< vector<size_t> >& mask_t_m){
@@ -444,6 +445,10 @@ void EOT::copyVec2Evec(const vector<double>& vec, Eigen::Vector2d& evec){
     evec(1) = vec[1];
 }
 
+// TODO: Adaptive Resampling:
+//      N_eff = 1 / SUM_i_to_N(w_i^2), 
+//      where w_i refers to the normalized weight of particle i.
+//      Resample each time N_eff drops below the threshold of N/2 where N is the number of particles.
 void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const int target){
     int numMeasurements = logWeights_m_p.size();
     vector<double> tmpWeights_p(m_param_.numParticles);
@@ -544,6 +549,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_defaultLogger_->error(m_err_str_);
         return;
     }
+    // TODO: Add hypothetical potential objects when an object is likely splited into two objects
     #if DEBUG
         m_defaultLogger_->info("m_currentExistences_t_: %v : %v ", m_currentExistences_t_.size(), m_currentExistences_t_);
     #endif
@@ -826,6 +832,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
             potential_objects_out.push_back(tmpDetectedPO);
         }
     }
+
+    // TODO: Remove objects that are mainly within another larger object
 
     timer_stop();
     m_defaultLogger_->info("frame id: %v , EOT done, costs %v ms.\n", frame_idx, getTimer_millisec());
