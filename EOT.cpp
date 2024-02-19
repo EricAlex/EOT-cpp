@@ -74,7 +74,7 @@ bool EOT::performPrediction(const double delta_time){
                 // Eigen::MatrixXd meanExtent = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose());
                 // Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
                 // m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
-                if(p%3==0){
+                if((p%(m_param_.numParticles/NUM_LEGACY_PARTICLES)==0)||(p%2==0)){
                     double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
                     Eigen::Matrix2d tmp_rot_mat;
                     tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
@@ -512,12 +512,14 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         }
         #pragma omp parallel for
         for(size_t p=0; p<m_param_.numParticles; ++p){
-            m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
-            copyVec2Mat(tmpExtent_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].e);
-            copyVec2Evec(tmpEigenvalues_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvalues);
-            copyVec2Mat(tmpEigenvectors_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvectors);
-            m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
-            m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
+            if(p%(m_param_.numParticles/NUM_LEGACY_PARTICLES)!=0){
+                m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
+                m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
+                m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
+                copyVec2Mat(tmpExtent_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].e);
+                copyVec2Evec(tmpEigenvalues_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvalues);
+                copyVec2Mat(tmpEigenvectors_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvectors);
+            }
         }
     }
 }
@@ -550,9 +552,6 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         return;
     }
     // TODO: Add hypothetical potential objects when an object is likely splited into two objects
-    #if DEBUG
-        m_defaultLogger_->info("m_currentExistences_t_: %v : %v ", m_currentExistences_t_.size(), m_currentExistences_t_);
-    #endif
     double exp_minus_meanMeasurements = exp(-double(m_param_.meanMeasurements));
     for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
         double currentAlive = m_currentExistences_t_[t]*exp(-double(m_currentMeanMeasurements_t_[t]));
@@ -792,36 +791,46 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         }
     }
 
-    m_currentMeanMeasurements_t_.resize(m_currentExistences_t_.size());
+    #if DEBUG
+        m_defaultLogger_->info("m_currentExistences_t_: %v : %v ", m_currentExistences_t_.size(), m_currentExistences_t_);
+    #endif
+
     // perform estimation
     m_currentPotentialObjects_t_.resize(0);
     m_currentAugmentedPOs_t_.resize(m_currentExistences_t_.size());
+    m_currentMeanMeasurements_t_.resize(m_currentExistences_t_.size());
     for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
         PO tmpDetectedPO;
         tmpDetectedPO.label = m_currentLabels_t_[t];
         double sum_p1(0), sum_p2(0), sum_v1(0), sum_v2(0), sum_t(0);
-        #pragma omp parallel for reduction(+:sum_p1, sum_p2, sum_v1, sum_v2, sum_t)
+        size_t particle_c(0);
+        #pragma omp parallel for reduction(+:sum_p1, sum_p2, sum_v1, sum_v2, sum_t, particle_c)
         for(size_t p=0; p<m_param_.numParticles; ++p){
-            sum_p1 += m_currentParticlesKinematic_t_p_[t][p].p1;
-            sum_p2 += m_currentParticlesKinematic_t_p_[t][p].p2;
-            sum_v1 += m_currentParticlesKinematic_t_p_[t][p].v1;
-            sum_v2 += m_currentParticlesKinematic_t_p_[t][p].v2;
-            sum_t += m_currentParticlesKinematic_t_p_[t][p].t;
+            if(p%(m_param_.numParticles/NUM_LEGACY_PARTICLES)!=0){
+                sum_p1 += m_currentParticlesKinematic_t_p_[t][p].p1;
+                sum_p2 += m_currentParticlesKinematic_t_p_[t][p].p2;
+                sum_v1 += m_currentParticlesKinematic_t_p_[t][p].v1;
+                sum_v2 += m_currentParticlesKinematic_t_p_[t][p].v2;
+                sum_t += m_currentParticlesKinematic_t_p_[t][p].t;
+                particle_c += 1;
+            }
         }
-        tmpDetectedPO.kinematic.p1 = sum_p1/double(m_param_.numParticles);
-        tmpDetectedPO.kinematic.p2 = sum_p2/double(m_param_.numParticles);
-        tmpDetectedPO.kinematic.v1 = sum_v1/double(m_param_.numParticles);
-        tmpDetectedPO.kinematic.v2 = sum_v2/double(m_param_.numParticles);
-        tmpDetectedPO.kinematic.t = sum_t/double(m_param_.numParticles);
+        tmpDetectedPO.kinematic.p1 = sum_p1/double(particle_c);
+        tmpDetectedPO.kinematic.p2 = sum_p2/double(particle_c);
+        tmpDetectedPO.kinematic.v1 = sum_v1/double(particle_c);
+        tmpDetectedPO.kinematic.v2 = sum_v2/double(particle_c);
+        tmpDetectedPO.kinematic.t = sum_t/double(particle_c);
         double sum_e0(0), sum_e1(0), sum_e2(0), sum_e3(0);
         #pragma omp parallel for reduction(+:sum_e0, sum_e1, sum_e2, sum_e3)
         for(size_t p=0; p<m_param_.numParticles; ++p){
-            sum_e0 += m_currentParticlesExtent_t_p_[t][p].e(0, 0);
-            sum_e1 += m_currentParticlesExtent_t_p_[t][p].e(0, 1);
-            sum_e2 += m_currentParticlesExtent_t_p_[t][p].e(1, 0);
-            sum_e3 += m_currentParticlesExtent_t_p_[t][p].e(1, 1);
+            if(p%(m_param_.numParticles/NUM_LEGACY_PARTICLES)!=0){
+                sum_e0 += m_currentParticlesExtent_t_p_[t][p].e(0, 0);
+                sum_e1 += m_currentParticlesExtent_t_p_[t][p].e(0, 1);
+                sum_e2 += m_currentParticlesExtent_t_p_[t][p].e(1, 0);
+                sum_e3 += m_currentParticlesExtent_t_p_[t][p].e(1, 1);
+            }
         }
-        tmpDetectedPO.extent.e = (Eigen::Matrix2d() << sum_e0, sum_e1, sum_e2, sum_e3).finished()/double(m_param_.numParticles);
+        tmpDetectedPO.extent.e = (Eigen::Matrix2d() << sum_e0, sum_e1, sum_e2, sum_e3).finished()/double(particle_c);
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(tmpDetectedPO.extent.e);
         tmpDetectedPO.extent.eigenvalues = eigensolver.eigenvalues();
         tmpDetectedPO.extent.eigenvectors = eigensolver.eigenvectors();

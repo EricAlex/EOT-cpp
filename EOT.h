@@ -19,6 +19,8 @@
 
 #define DEBUG	false
 
+#define NUM_LEGACY_PARTICLES    300
+
 using namespace std;
 using namespace std::chrono;
 
