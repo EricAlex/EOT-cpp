@@ -200,7 +200,7 @@ int main(void){
     eot_param para = {
         .accelerationDeviation = 1,
         #if STATIC_SIMULATION
-            .rotationalAccelerationDeviation = 25*M_PI/180,
+            .rotationalAccelerationDeviation = 30*M_PI/180,
         #else
             .rotationalAccelerationDeviation = M_PI/180,
         #endif
@@ -211,16 +211,17 @@ int main(void){
         .meanClutter = 5,
         .priorVelocityCovariance = Eigen::DiagonalMatrix<double, 2>(100, 100),
         #if STATIC_SIMULATION
-            .priorTurningRateDeviation = 25*M_PI/180,
+            .priorTurningRateDeviation = 30*M_PI/180,
         #else
             .priorTurningRateDeviation = M_PI/180,
         #endif
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
-        .degreeFreedomPrediction = 2000,
-        .numParticles = 2000,
-        .regularizationDeviation = meanTargetDimension/100,
+        .degreeFreedomPrediction = 600,
+        .numParticles = 1000,
+        .ratioLegacyParticles = 0.33,
+        .regularizationDeviation = meanTargetDimension/10,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
         .numOuterIterations = 2
@@ -304,6 +305,13 @@ int main(void){
                 x.push_back(tmpPolygon[0](0));
                 y.push_back(tmpPolygon[0](1));
                 matplot::plot(x, y, "r")->line_width(3);
+
+                x.clear(); y.clear();
+                x.push_back(potential_objects_out[t].kinematic.p1);
+                y.push_back(potential_objects_out[t].kinematic.p2);
+                x.push_back(potential_objects_out[t].kinematic.p1 + potential_objects_out[t].kinematic.v1);
+                y.push_back(potential_objects_out[t].kinematic.p2 + potential_objects_out[t].kinematic.v2);
+                matplot::plot(x, y, "r")->line_width(1);
             }
         }
 
@@ -392,8 +400,9 @@ int main(int argc, char *argv[]){
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
             .priorExtentDegreeFreedom = 30,
-            .degreeFreedomPrediction = 2000,
-            .numParticles = 300,
+            .degreeFreedomPrediction = 1500,
+            .numParticles = 800,
+            .ratioLegacyParticles = 0.2,
             .regularizationDeviation = meanTargetDimension/10,
             .detectionThreshold = 0.5,
             .thresholdPruning = 1e-3,

@@ -3,7 +3,7 @@
 
 using namespace std;
 
-#define SIMULATION	true
+#define SIMULATION	false
 
 #define LIDAR_ANGULAR_RESOLUTION	0.0013962634 // in radian
 #define EOT_INIT_VAILD_GRID_LABEL	1
@@ -74,6 +74,7 @@ struct eot_param{
 	double degreeFreedomPrediction; // default 2000
 	// sampling parameters
 	size_t numParticles; // default 1000
+	double ratioLegacyParticles; // default 0.1
 	double regularizationDeviation; // default 0
 	// detection and pruning parameters
 	double detectionThreshold; // default 0.5

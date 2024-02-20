@@ -19,8 +19,6 @@
 
 #define DEBUG	false
 
-#define NUM_LEGACY_PARTICLES    300
-
 using namespace std;
 using namespace std::chrono;
 
@@ -39,7 +37,15 @@ class EOT{
 
     	~EOT(){}
 
-        void init(const eot_param& init_parameters){m_param_ = init_parameters;}
+        void init(const eot_param& init_parameters){
+            m_param_ = init_parameters;
+            if((m_param_.ratioLegacyParticles<(1/double(m_param_.numParticles)))||(m_param_.ratioLegacyParticles>=1)){
+                m_defaultLogger_->error("Illegal ratioLegacyParticles: %v, should be between 0 and 1.", m_param_.ratioLegacyParticles);
+                m_legacy_particles_mod_ = m_param_.numParticles;
+            }else{
+                m_legacy_particles_mod_ = 1/m_param_.ratioLegacyParticles;
+            }
+        }
 
     	void eot_track(const vector<measurement>& measurements, 
                        const grid_para& measurements_paras, 
@@ -86,6 +92,7 @@ class EOT{
         uint32_t m_cols_shift_;
         double m_grid_resolution_;
         eot_param m_param_;
+        size_t m_legacy_particles_mod_;
         string m_err_str_;
         unordered_map<uint32_t, uint32_t> m_index_label_map_;
         vector<po_label> m_currentLabels_t_;
