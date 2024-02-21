@@ -74,7 +74,7 @@ bool EOT::performPrediction(const double delta_time){
                 // Eigen::MatrixXd meanExtent = (rot_mat * m_currentParticlesExtent_t_p_[t][p].e * rot_mat.transpose());
                 // Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
                 // m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
-                if((p%m_legacy_particles_mod_==0)||(p%2==0)){
+                if((p%m_legacy_particles_mod_==0)||(p%3==0)){
                     double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
                     Eigen::Matrix2d tmp_rot_mat;
                     tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
@@ -445,11 +445,16 @@ void EOT::copyVec2Evec(const vector<double>& vec, Eigen::Vector2d& evec){
     evec(1) = vec[1];
 }
 
-// TODO: Adaptive Resampling:
+// Adaptive Resampling:
 //      N_eff = 1 / SUM_i_to_N(w_i^2), 
 //      where w_i refers to the normalized weight of particle i.
 //      Resample each time N_eff drops below the threshold of N/2 where N is the number of particles.
-void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const int target){
+// Test results:
+//      Not applicable in this resampling;
+//      Partially update the particles instead.
+void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
+                          const int target,
+                          bool is_legacy_target){
     int numMeasurements = logWeights_m_p.size();
     vector<double> tmpWeights_p(m_param_.numParticles);
     vector<double> exp_tmpWeights_p(m_param_.numParticles);
@@ -496,7 +501,6 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
         for(size_t p=0; p<m_param_.numParticles; ++p){
             tmpWeights_p[p] = tmpWeights_p[p]/tmpSum;
         }
-
         vector<size_t> indexes(m_param_.numParticles);
         resampleSystematic(tmpWeights_p, indexes);
         vector<po_kinematic> tmpKinematic_p(m_param_.numParticles);
@@ -510,9 +514,29 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p, const 
             copyEvec2Vec(m_currentParticlesExtent_t_p_[target][p].eigenvalues, tmpEigenvalues_p[p]);
             copyMat2Vec(m_currentParticlesExtent_t_p_[target][p].eigenvectors, tmpEigenvectors_p[p]);
         }
-        #pragma omp parallel for
-        for(size_t p=0; p<m_param_.numParticles; ++p){
-            if(p%m_legacy_particles_mod_!=0){
+        double squared_sum(0);
+        #pragma omp parallel for reduction(+:squared_sum)
+        for(size_t p=0; p<m_param_.numParticles; ++p) {
+            squared_sum += tmpWeights_p[p]*tmpWeights_p[p];
+        }
+        #if DEBUG
+            m_defaultLogger_->info("\ttarget: %v, N_eff: %v, Existences: %v", target, 1/squared_sum, m_currentExistences_t_[target]);
+        #endif
+        if((is_legacy_target)&&((1/squared_sum)>(double(m_param_.numParticles)/20))){
+            #pragma omp parallel for
+            for(size_t p=0; p<m_param_.numParticles; ++p){
+                if(p%m_legacy_particles_mod_!=0){
+                    m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
+                    m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
+                    m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
+                    copyVec2Mat(tmpExtent_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].e);
+                    copyVec2Evec(tmpEigenvalues_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvalues);
+                    copyVec2Mat(tmpEigenvectors_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvectors);
+                }
+            }
+        }else{
+            #pragma omp parallel for
+            for(size_t p=0; p<m_param_.numParticles; ++p){
                 m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
                 m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
                 m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
@@ -728,52 +752,51 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                     getWeightsUnknown(weights_m_p, m_currentExistences_t_[t], m, weightsExtrinsic_t_m_p[t][m], currentExistencesExtrinsic_m_t[m][t]);
                 }
             }else{
-                updateParticles(weights_m_p, t);
+                updateParticles(weights_m_p, t, true);
             }
         }
 
         // perform update step for new targets
         int targetIndex = int(numLegacy) - 1;
-        for(int t=(numMeasurements-1); t>=0; --t){
-            if(newIndexes_map.find(t) != newIndexes_map.end()){
-                targetIndex = targetIndex + 1;
-                vector< vector<double> > weights_m_p(numMeasurements+1, vector<double>(m_param_.numParticles, 0.0));
+        for(auto& n_idx:newIndexes_map){
+            int t = n_idx.first;
+            targetIndex = targetIndex + 1;
+            vector< vector<double> > weights_m_p(numMeasurements+1, vector<double>(m_param_.numParticles, 0.0));
+            #pragma omp parallel for
+            for(size_t p=0; p<m_param_.numParticles; ++p){
+                weights_m_p[numMeasurements][p] = newWeights_t_p[targetIndex-numLegacy][p];
+            }
+            for(int m=0; m<=t; ++m){
+                double outputTmpDA = outputDA[m][targetIndexes[m][t]];
+                bool m_not_equals_t = (m != t);
                 #pragma omp parallel for
                 for(size_t p=0; p<m_param_.numParticles; ++p){
-                    weights_m_p[numMeasurements][p] = newWeights_t_p[targetIndex-numLegacy][p];
-                }
-                for(int m=0; m<=t; ++m){
-                    double outputTmpDA = outputDA[m][targetIndexes[m][t]];
-                    bool m_not_equals_t = (m != t);
-                    #pragma omp parallel for
-                    for(size_t p=0; p<m_param_.numParticles; ++p){
-                        double currentWeights = likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
-                        if(!isinf(outputTmpDA)){
-                            currentWeights *= outputTmpDA;
-                        }
-                        if(m_not_equals_t){
-                            currentWeights += 1;
-                        }
-                        weights_m_p[m][p] = log(currentWeights);
+                    double currentWeights = likelihoodNew1_t_m_p[targetIndex-numLegacy][m][p];
+                    if(!isinf(outputTmpDA)){
+                        currentWeights *= outputTmpDA;
                     }
+                    if(m_not_equals_t){
+                        currentWeights += 1;
+                    }
+                    weights_m_p[m][p] = log(currentWeights);
                 }
+            }
 
-                // calculate extrinsic information for new targets (at all except last iteration) or belief (at last iteration)
-                if(outer != (m_param_.numOuterIterations-1)){
-                    #pragma omp parallel for
-                    for(int m=0; m<=t; ++m){
-                        getWeightsUnknown(weights_m_p, m_currentExistences_t_[targetIndex], m, 
-                            weightsExtrinsicNew_t_m_p[targetIndex-numLegacy][m], currentExistencesExtrinsic_m_t[m][targetIndex]);
-                    }
-                }else{
-                    updateParticles(weights_m_p, targetIndex);
-                    #pragma omp parallel for
-                    for(size_t p=0; p<m_param_.numParticles; ++p){
-                        Eigen::Vector2d tmpSpeed = utilities::sampleMvNormal(Eigen::Vector2d(0.0, 0.0), m_param_.priorVelocityCovariance);
-                        m_currentParticlesKinematic_t_p_[targetIndex][p].v1 = tmpSpeed(0);
-                        m_currentParticlesKinematic_t_p_[targetIndex][p].v2 = tmpSpeed(1);
-                        m_currentParticlesKinematic_t_p_[targetIndex][p].t = utilities::sampleGaussian(0, m_param_.priorTurningRateDeviation);
-                    }
+            // calculate extrinsic information for new targets (at all except last iteration) or belief (at last iteration)
+            if(outer != (m_param_.numOuterIterations-1)){
+                #pragma omp parallel for
+                for(int m=0; m<=t; ++m){
+                    getWeightsUnknown(weights_m_p, m_currentExistences_t_[targetIndex], m, 
+                        weightsExtrinsicNew_t_m_p[targetIndex-numLegacy][m], currentExistencesExtrinsic_m_t[m][targetIndex]);
+                }
+            }else{
+                updateParticles(weights_m_p, targetIndex, false);
+                #pragma omp parallel for
+                for(size_t p=0; p<m_param_.numParticles; ++p){
+                    Eigen::Vector2d tmpSpeed = utilities::sampleMvNormal(Eigen::Vector2d(0.0, 0.0), m_param_.priorVelocityCovariance);
+                    m_currentParticlesKinematic_t_p_[targetIndex][p].v1 = tmpSpeed(0);
+                    m_currentParticlesKinematic_t_p_[targetIndex][p].v2 = tmpSpeed(1);
+                    m_currentParticlesKinematic_t_p_[targetIndex][p].t = utilities::sampleGaussian(0, m_param_.priorTurningRateDeviation);
                 }
             }
         }

@@ -39,8 +39,8 @@ class EOT{
 
         void init(const eot_param& init_parameters){
             m_param_ = init_parameters;
-            if((m_param_.ratioLegacyParticles<(1/double(m_param_.numParticles)))||(m_param_.ratioLegacyParticles>=1)){
-                m_defaultLogger_->error("Illegal ratioLegacyParticles: %v, should be between 0 and 1.", m_param_.ratioLegacyParticles);
+            if((m_param_.ratioLegacyParticles<(1/double(m_param_.numParticles)))||(m_param_.ratioLegacyParticles>0.5)){
+                m_defaultLogger_->error("Illegal ratioLegacyParticles: %v, should be between 0 and 0.5.", m_param_.ratioLegacyParticles);
                 m_legacy_particles_mod_ = m_param_.numParticles;
             }else{
                 m_legacy_particles_mod_ = 1/m_param_.ratioLegacyParticles;
@@ -68,7 +68,9 @@ class EOT{
                                const int skipIndex, 
                                vector<double>& weights,
                                double& updatedExistence);
-        void updateParticles(const vector< vector<double> >& logWeights_m_p, const int target);
+        void updateParticles(const vector< vector<double> >& logWeights_m_p,
+                             const int target,
+                             bool is_legacy_target);
         void resampleSystematic(const vector<double>& weights, vector<size_t>& indexes);
         bool getPromisingNewTargets(const vector<measurement>& ori_measurements, 
                                     vector<size_t>& newIndexes, 
