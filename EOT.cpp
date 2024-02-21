@@ -288,7 +288,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
     return true;
 }
 
-// TODO: Mask measurements for new potential targets
 void EOT::maskMeasurements4LegacyPOs(const vector<measurement>& measurements,
                                      vector< vector<size_t> >& mask_m_t,
                                      vector< vector<size_t> >& mask_t_m){
@@ -522,17 +521,17 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
         #if DEBUG
             m_defaultLogger_->info("\ttarget: %v, N_eff: %v, Existences: %v", target, 1/squared_sum, m_currentExistences_t_[target]);
         #endif
-        if((is_legacy_target)&&((1/squared_sum)>(double(m_param_.numParticles)/20))){
+        if((is_legacy_target)&&(((1/squared_sum)>(double(m_param_.numParticles)/50))||(m_currentExistences_t_[target]<1))){
             #pragma omp parallel for
             for(size_t p=0; p<m_param_.numParticles; ++p){
                 if(p%m_legacy_particles_mod_!=0){
                     m_currentParticlesKinematic_t_p_[target][p] = tmpKinematic_p[indexes[p]];
-                    m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
-                    m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
                     copyVec2Mat(tmpExtent_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].e);
                     copyVec2Evec(tmpEigenvalues_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvalues);
                     copyVec2Mat(tmpEigenvectors_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvectors);
                 }
+                m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
+                m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
             }
         }else{
             #pragma omp parallel for
