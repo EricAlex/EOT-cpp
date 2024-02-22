@@ -184,7 +184,7 @@ double utilities::measurement_likelihood_(const po_kinematic& x,
                                           const double gate_ratio,
                                           const Eigen::Vector2d& M, 
                                           const double sd_noise){
-    double inner_base_weight(2/3.0);
+    double inner_base_weight(1/2.0);
     double width(eigenvalues(0)), length(eigenvalues(1));
     double radius(gate_ratio * sqrt(std::pow(length, 2) + std::pow(width, 2)));
     if((M(0)<(x.p1-radius))||(M(0)>(x.p1+radius))||(M(1)<(x.p2-radius))||(M(1)>(x.p2+radius))){

@@ -521,7 +521,7 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
         #if DEBUG
             m_defaultLogger_->info("\ttarget: %v, N_eff: %v, Existences: %v", target, 1/squared_sum, m_currentExistences_t_[target]);
         #endif
-        if((is_legacy_target)&&(((1/squared_sum)>(double(m_param_.numParticles)/50))||(m_currentExistences_t_[target]<1))){
+        if((is_legacy_target)&&(((1/squared_sum)>(double(m_param_.numParticles)/30))||(m_currentExistences_t_[target]<1))){
             #pragma omp parallel for
             for(size_t p=0; p<m_param_.numParticles; ++p){
                 if(p%m_legacy_particles_mod_!=0){
@@ -529,6 +529,11 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
                     copyVec2Mat(tmpExtent_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].e);
                     copyVec2Evec(tmpEigenvalues_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvalues);
                     copyVec2Mat(tmpEigenvectors_p[indexes[p]], m_currentParticlesExtent_t_p_[target][p].eigenvectors);
+                }else{
+                    Eigen::Vector2d tmpSpeed = utilities::sampleMvNormal(Eigen::Vector2d(0.0, 0.0), m_param_.priorVelocityCovariance/10);
+                    m_currentParticlesKinematic_t_p_[target][p].v1 += tmpSpeed(0);
+                    m_currentParticlesKinematic_t_p_[target][p].v2 += tmpSpeed(1);
+                    m_currentParticlesKinematic_t_p_[target][p].t += utilities::sampleGaussian(0, m_param_.priorTurningRateDeviation/10);
                 }
                 m_currentParticlesKinematic_t_p_[target][p].p1 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
                 m_currentParticlesKinematic_t_p_[target][p].p2 += m_param_.regularizationDeviation * utilities::sampleGaussian(0, 1);
