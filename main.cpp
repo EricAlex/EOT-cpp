@@ -219,7 +219,7 @@ int main(void){
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
         .degreeFreedomPrediction = 900,
-        .numParticles = 1000,
+        .numParticles = 800,
         .ratioLegacyParticles = 0.5,
         .regularizationDeviation = meanTargetDimension/10,
         .detectionThreshold = 0.5,
