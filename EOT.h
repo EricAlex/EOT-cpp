@@ -101,6 +101,7 @@ class EOT{
         vector< vector<po_kinematic> > m_currentParticlesKinematic_t_p_;
         vector<double> m_currentExistences_t_;
         vector< vector<po_extent> > m_currentParticlesExtent_t_p_;
+        vector<bool> m_currentLegacyParticlesFlags_t_;
         vector<PO> m_currentPotentialObjects_t_;
         vector<PO> m_currentAugmentedPOs_t_;
         vector<size_t> m_currentMeanMeasurements_t_;

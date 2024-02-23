@@ -204,8 +204,8 @@ int main(void){
         #else
             .rotationalAccelerationDeviation = M_PI/180,
         #endif
-        .survivalProbability = 0.9,
-        .meanBirths = 0.1,
+        .survivalProbability = 0.999,
+        .meanBirths = 0.001,
         .measurementVariance = measurementDeviation*measurementDeviation,
         .meanMeasurements = 15,
         .meanClutter = 5,
@@ -218,9 +218,9 @@ int main(void){
         .meanTargetDimension = meanTargetDimension,
         .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
         .priorExtentDegreeFreedom = 30,
-        .degreeFreedomPrediction = 900,
+        .degreeFreedomPrediction = 1000,
         .numParticles = 800,
-        .ratioLegacyParticles = 0.5,
+        .ratioLegacyParticles = 0.4,
         .regularizationDeviation = meanTargetDimension/10,
         .detectionThreshold = 0.5,
         .thresholdPruning = 1e-3,
@@ -229,10 +229,10 @@ int main(void){
     #if STATIC_SIMULATION
         size_t numSteps = 100;
     #else
-        size_t numSteps = 60;
+        size_t numSteps = 80;
     #endif
-    size_t numTargets = 5;
-    double startRadius = 75;
+    size_t numTargets = 7;
+    double startRadius = 90;
     double startVelocity = 10;
     double scanTime = 0.2;
     vector<Eigen::Vector4d> startStates;
@@ -252,7 +252,7 @@ int main(void){
     EOT sim_eot;
     sim_eot.init(para);
     auto h = matplot::figure();
-    h->size(600, 600);
+    h->size(1200, 1200);
     for(size_t s=0; s<numSteps; ++s){
         vector<PO> potential_objects_out;
         sim_eot.eot_track(clutteredMeasurements[s], grid_parameters, scanTime, s, potential_objects_out);
