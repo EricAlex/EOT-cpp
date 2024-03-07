@@ -1,12 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
-project(eot_cpp LANGUAGES CXX CUDA)
+project(eot_cpp)
 
 set(CMAKE_BUILD_TYPE Release)
 # set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
-
-find_package(CUDAToolkit)
 
 include(FetchContent)
 FetchContent_Declare(matplotplusplus
@@ -29,20 +27,16 @@ add_definitions(${PCL_DEFINITIONS})
 set(project_SOURCES ./main.cpp
                     ./EOT.cpp
                     ./utilities.cpp
-                    ./third_party/easylogging++.cc
-                    ./device.cu)
+                    ./third_party/easylogging++.cc)
 
 set(project_HEADERS ./EOT.h
                     ./utilities.h
                     ./third_party/dbscan.h
                     ./globaldef.h
-                    ./third_party/easylogging++.h
-                    ./device.h)
+                    ./third_party/easylogging++.h)
  
 add_executable(${PROJECT_NAME} ${project_SOURCES} ${project_HEADERS})
 
 target_link_libraries (${PROJECT_NAME} ${PCL_LIBRARIES} ${Boost_LIBRARIES} matplot)
-
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 configure_file(logger.conf logger.conf COPYONLY)
