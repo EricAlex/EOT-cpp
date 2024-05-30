@@ -336,13 +336,6 @@ int main(void){
     return 0;
 }
 #else
-bool FNcmp(boost::filesystem::path path1, boost::filesystem::path path2){
-    string s1 = path1.stem().string();
-    string s2 = path2.stem().string();
-    double n1 = atoi(s1.c_str());
-    double n2 = atoi(s2.c_str());
-    return n1 < n2;
-}
 vector<boost::filesystem::path> streamFile(string dataPath){
     vector<boost::filesystem::path> paths(boost::filesystem::directory_iterator{dataPath},
                                           boost::filesystem::directory_iterator{});
@@ -353,7 +346,7 @@ vector<boost::filesystem::path> streamFile(string dataPath){
             paths_out.push_back(iter->string());
         }
 	}
-    sort(paths_out.begin(), paths_out.end(), FNcmp);
+    sort(paths_out.begin(), paths_out.end());
     return paths_out;
 }
 void loadData(const boost::filesystem::path& pcd_path, 
