@@ -351,6 +351,7 @@ vector<boost::filesystem::path> streamFile(string dataPath){
 }
 void loadData(const boost::filesystem::path& pcd_path, 
               vector<measurement>& Measurements,
+              vector<size_t>& promissing_new_t_idx,
               grid_para& grid_parameters,
               double& scanTime,
               uint64_t& frame_idx){
@@ -363,6 +364,13 @@ void loadData(const boost::filesystem::path& pcd_path,
             fbinaryin.read(reinterpret_cast<char*>(&(tmpM(0))), sizeof(tmpM(0)));
             fbinaryin.read(reinterpret_cast<char*>(&(tmpM(1))), sizeof(tmpM(1)));
             Measurements.push_back(tmpM);
+        }
+        size_t num_new_tar;
+        fbinaryin.read(reinterpret_cast<char*>(&num_new_tar), sizeof(num_new_tar));
+        for(size_t i=0; i<num_new_tar; ++i){
+            size_t idx;
+            fbinaryin.read(reinterpret_cast<char*>(&(idx)), sizeof(idx));
+            promissing_new_t_idx.push_back(idx);
         }
         fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.dim1_min)), sizeof(grid_parameters.dim1_min));
         fbinaryin.read(reinterpret_cast<char*>(&(grid_parameters.dim1_max)), sizeof(grid_parameters.dim1_max));
@@ -397,7 +405,7 @@ int main(int argc, char *argv[]){
             .numParticles = 300,
             .ratioLegacyParticles = 0.5,
             .regularizationDeviation = meanTargetDimension/10,
-            .detectionThreshold = 0.5,
+            .detectionThreshold = 1e-3,
             .thresholdPruning = 1e-3,
             .numOuterIterations = 2
         };
@@ -408,16 +416,17 @@ int main(int argc, char *argv[]){
         boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
             new pcl::visualization::PCLVisualizer("3D Viewer"));
         auto stramIterator = stream.begin();
-        viewer->setCameraPosition(100, 0, 500, 100, 0, 1, 1, 0, 0);
+        viewer->setCameraPosition(100, 0, 100, 0, 0, 1, 1, 0, 0);
         while (!viewer->wasStopped()) {
             vector<measurement> Measurements;
+            vector<size_t> promissing_new_t_idx;
             grid_para grid_parameters;
             double scanTime;
             uint64_t frame_idx;
-            loadData(*stramIterator, Measurements, grid_parameters, scanTime, frame_idx);
+            loadData(*stramIterator, Measurements, promissing_new_t_idx, grid_parameters, scanTime, frame_idx);
 
             vector<PO> potential_objects_out;
-            sim_eot.eot_track(Measurements, grid_parameters, scanTime, frame_idx, potential_objects_out);
+            sim_eot.eot_track(Measurements, promissing_new_t_idx, grid_parameters, scanTime, frame_idx, potential_objects_out);
 
             pcl::PointCloud<pcl::PointXYZ>::Ptr show_cloud_M(new pcl::PointCloud<pcl::PointXYZ>);
             double step(0.1);

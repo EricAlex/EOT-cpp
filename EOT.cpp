@@ -142,23 +142,27 @@ bool sizeCmp(pair<size_t, size_t> p1, pair<size_t, size_t> p2){
 }
 
 bool EOT::getPromisingNewTargets(const vector<measurement>& measurements, 
+                                 const vector<size_t>& promissing_new_t_idx,
                                  vector<size_t>& newIndexes, 
                                  vector<measurement>& ordered_measurements){
-    unordered_set<size_t> remainIndexes, rmedLegacyIndexes;
-    for(size_t m=0; m<measurements.size(); ++m){
-        remainIndexes.insert(m);
-    }
-    double sigmaRatio(4.0);
-    vector< vector<Eigen::Vector2d> > legacyPOPolygons;
-    for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
-        vector<Eigen::Vector2d> tmpPolygon;
-        utilities::extent2Polygon(m_currentPotentialObjects_t_[t].kinematic, m_currentPotentialObjects_t_[t].extent.eigenvalues, 
-                                  m_currentPotentialObjects_t_[t].extent.eigenvectors, sigmaRatio, tmpPolygon);
-        legacyPOPolygons.push_back(tmpPolygon);
-    }
-    if(m_currentPotentialObjects_t_.size()>0){
-        for(size_t m=0; m<measurements.size(); ++m){
-            measurement M = measurements[m];
+    
+    if(m_currentPotentialObjects_t_.size()==0){
+        ordered_measurements = measurements;
+        newIndexes = promissing_new_t_idx;
+    }else{
+        double sigmaRatio(1.0);
+        vector< vector<Eigen::Vector2d> > legacyPOPolygons;
+        for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
+            vector<Eigen::Vector2d> tmpPolygon;
+            utilities::extent2Polygon(m_currentPotentialObjects_t_[t].kinematic, m_currentPotentialObjects_t_[t].extent.eigenvalues, 
+                                    m_currentPotentialObjects_t_[t].extent.eigenvectors, sigmaRatio, tmpPolygon);
+            legacyPOPolygons.push_back(tmpPolygon);
+        }
+        vector<size_t> rmedLegacyIndexes;
+        size_t pre_idx(0);
+        for(size_t i=0; i<promissing_new_t_idx.size(); ++i){
+            measurement M = measurements[promissing_new_t_idx[i]];
+            bool is_in_any_legacy(false);
             for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
                 double radius = sigmaRatio*sqrt(std::pow(m_currentPotentialObjects_t_[t].extent.eigenvalues(1), 2) + std::pow(m_currentPotentialObjects_t_[t].extent.eigenvalues(0), 2));
                 if((M(0)<(m_currentPotentialObjects_t_[t].kinematic.p1-radius))||(M(0)>(m_currentPotentialObjects_t_[t].kinematic.p1+radius))
@@ -166,123 +170,25 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
                     continue;
                 }else{
                     if(utilities::isInPolygon(legacyPOPolygons[t], M)){
-                        remainIndexes.erase(remainIndexes.find(m));
-                        rmedLegacyIndexes.insert(m);
+                        is_in_any_legacy = true;
+                        for(size_t j=pre_idx; j<=promissing_new_t_idx[i]; ++j){
+                            rmedLegacyIndexes.push_back(j);
+                        }
                         break;
                     }
                 }
             }
-        }
-    }
-
-    #if SIMULATION
-    // clustering using DBSCAN
-    vector<vec2d> m4Cluster;
-    for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
-        m4Cluster.push_back(vec2d{measurements[*it](0), measurements[*it](1)});
-    }
-    auto dbscan = DBSCAN<vec2d, double>();
-    dbscan.Run(&m4Cluster, 2, 2*m_param_.meanTargetDimension, 1, &dist_func);
-    auto noise = dbscan.Noise;
-    auto clusters = dbscan.Clusters;
-    for(auto& n:noise){
-        ordered_measurements.push_back(measurement(m4Cluster[n][0], m4Cluster[n][1]));
-    }
-    for(size_t i=0; i<clusters.size(); i++){
-        measurement m_centor(0, 0);
-        for(size_t j=0; j<clusters[i].size(); j++){
-            m_centor += measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]);
-        }
-        m_centor = m_centor/clusters[i].size();
-        size_t centor_idx(0);
-        double min_dist(numeric_limits<double>::infinity());
-        for(size_t j=0; j<clusters[i].size(); j++){
-            measurement dist_vec = measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]) - m_centor;
-            double dist = dist_vec.norm();
-            if(dist<min_dist){
-                min_dist = dist;
-                centor_idx = j;
-            }
-        }
-        for(size_t j=0; j<clusters[i].size(); j++){
-            if(j!=centor_idx){
-                ordered_measurements.push_back(measurement(m4Cluster[clusters[i][j]][0], m4Cluster[clusters[i][j]][1]));
-            }
-        }
-        ordered_measurements.push_back(measurement(m4Cluster[clusters[i][centor_idx]][0], m4Cluster[clusters[i][centor_idx]][1]));
-        newIndexes.push_back(ordered_measurements.size()-1);
-    }
-    #else
-    m_index_label_map_.clear();
-    unordered_map<uint32_t, measurement> index_measurement_map;
-    for(auto it=remainIndexes.begin(); it!=remainIndexes.end(); it++){
-        uint32_t index;
-        coord2index(measurements[*it](0), measurements[*it](1), index);
-        m_index_label_map_[index] = EOT_INIT_VAILD_GRID_LABEL;
-        index_measurement_map[index] = measurements[*it];
-    }
-    vector<vector<uint32_t>> label_cluster_indices;
-    vector<pair<size_t, size_t>> cluster_idx_size_pair;
-    // grow seed grid
-    uint32_t label = EOT_INIT_VAILD_GRID_LABEL;
-    auto it = m_index_label_map_.begin();
-    while (it != m_index_label_map_.end()) {
-        if (it->second == EOT_INIT_VAILD_GRID_LABEL) {
-            vector<uint32_t> temp_indices;
-            ++label;
-            it->second = label;
-            stack<uint32_t> neighbors;
-            neighbors.emplace(it->first);
-            while (!neighbors.empty()) {
-                uint32_t cur_index = neighbors.top();
-                temp_indices.push_back(cur_index);
-                neighbors.pop();
-                find_neighbors_(cur_index, label, neighbors);
-            }
-            label_cluster_indices.push_back(temp_indices);
-            cluster_idx_size_pair.push_back(make_pair(label_cluster_indices.size()-1, temp_indices.size()));
-        }
-        it++;
-    }
-
-    sort(cluster_idx_size_pair.begin(), cluster_idx_size_pair.end(), sizeCmp);
-    for(auto& p:cluster_idx_size_pair){
-        size_t m_size = label_cluster_indices[p.first].size();
-        vector<measurement> cluster(m_size);
-        measurement m_centor(0, 0);
-        for(size_t j=0; j<m_size; j++){
-            cluster[j] = index_measurement_map[label_cluster_indices[p.first][j]];
-            m_centor += cluster[j];
-        }
-        if(m_size<=2){
-            for(size_t j=0; j<m_size; j++){
-                ordered_measurements.push_back(cluster[j]);
-            }
-        }else{
-            m_centor = m_centor/m_size;
-            size_t centor_idx(0);
-            double min_dist(numeric_limits<double>::infinity());
-            for(size_t j=0; j<m_size; j++){
-                measurement dist_vec = cluster[j] - m_centor;
-                double dist = dist_vec.norm();
-                if(dist<min_dist){
-                    min_dist = dist;
-                    centor_idx = j;
+            if(!is_in_any_legacy){
+                for(size_t j=pre_idx; j<=promissing_new_t_idx[i]; ++j){
+                    ordered_measurements.push_back(measurements[j]);
                 }
+                newIndexes.push_back(ordered_measurements.size()-1);
             }
-            for(size_t j=0; j<m_size; j++){
-                if(j!=centor_idx){
-                    ordered_measurements.push_back(cluster[j]);
-                }
-            }
-            ordered_measurements.push_back(cluster[centor_idx]);
-            newIndexes.push_back(ordered_measurements.size()-1);
+            pre_idx = promissing_new_t_idx[i]+1;
         }
-    }
-    #endif
-
-    for(auto it=rmedLegacyIndexes.begin(); it!=rmedLegacyIndexes.end(); it++){
-        ordered_measurements.push_back(measurements[*it]);
+        for(auto& idx:rmedLegacyIndexes){
+            ordered_measurements.push_back(measurements[idx]);
+        }
     }
 
     return true;
@@ -556,6 +462,7 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
 }
 
 void EOT::eot_track(const vector<measurement>& ori_measurements, 
+                    const vector<size_t>& promissing_new_t_idx,
                     const grid_para& measurements_paras, 
                     const double delta_time, 
                     const uint64_t frame_idx, 
@@ -596,7 +503,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     // get indexes of promising new objects
     vector<size_t> newIndexes; // store indexes in reverse order
     vector<measurement> measurements;
-    getPromisingNewTargets(ori_measurements, newIndexes, measurements);
+    getPromisingNewTargets(ori_measurements, promissing_new_t_idx, newIndexes, measurements);
     vector< vector<size_t> > mask_m_t, mask_t_m;
     maskMeasurements4LegacyPOs(measurements, mask_m_t, mask_t_m);
     size_t numNew = newIndexes.size();

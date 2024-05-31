@@ -17,7 +17,7 @@
 #include "third_party/dbscan.h"
 #include "third_party/easylogging++.h"
 
-#define DEBUG	false
+#define DEBUG	true
 
 using namespace std;
 using namespace std::chrono;
@@ -48,6 +48,7 @@ class EOT{
         }
 
     	void eot_track(const vector<measurement>& measurements, 
+                       const vector<size_t>& promissing_new_t_idx,
                        const grid_para& measurements_paras, 
                        const double delta_time, 
                        const uint64_t frame_idx, 
@@ -73,6 +74,7 @@ class EOT{
                              bool is_legacy_target);
         void resampleSystematic(const vector<double>& weights, vector<size_t>& indexes);
         bool getPromisingNewTargets(const vector<measurement>& ori_measurements, 
+                                    const vector<size_t>& promissing_new_t_idx,
                                     vector<size_t>& newIndexes, 
                                     vector<measurement>& ordered_measurements);
         void copyMat2Vec(const Eigen::Matrix2d& mat, vector<double>& vec);
