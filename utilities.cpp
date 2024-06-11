@@ -150,7 +150,8 @@ double utilities::sampleGamma_mv(double mean, double variance){
 
 size_t utilities::mean_number_of_measurements(const Eigen::Vector2d& eigenvalues,
                                               float grid_resolution){
-    return size_t((eigenvalues(0)+eigenvalues(1))/(grid_resolution)) + size_t(eigenvalues(0)*eigenvalues(1)/(grid_resolution*grid_resolution))/4 + 1;
+    // return size_t((eigenvalues(0)+eigenvalues(1))/(grid_resolution)) + size_t(eigenvalues(0)*eigenvalues(1)/(grid_resolution*grid_resolution))/4 + 1;
+    return size_t(eigenvalues(0)*eigenvalues(1)/(grid_resolution*grid_resolution))/5 + 1;
 }
 
 double utilities::p2lDistance(const Eigen::Vector2d& a, 
@@ -264,4 +265,96 @@ Eigen::MatrixXd utilities::sqrtm(const Eigen::MatrixXd& A){
     Eigen::MatrixXd sqrtL = P * D.cwiseSqrt() * P.transpose();
 
     return sqrtL;
+}
+
+Eigen::MatrixXd utilities::eigen2Extent(const Eigen::VectorXd& eigenvalues, const Eigen::MatrixXd& eigenvectors) {
+    // Ensure compatibility of dimensions
+    assert(eigenvalues.size() == eigenvectors.cols());
+    // Create a diagonal matrix from the eigenvalues
+    Eigen::MatrixXd diagonalMatrix = eigenvalues.asDiagonal();
+    // Compute and return the original matrix
+    return eigenvectors * diagonalMatrix * eigenvectors.transpose();
+}
+
+// Function to convert Eigen vectors to Boost.Geometry polygons
+polygon_type eigenToBoost(const std::vector<Eigen::Vector2d>& points) {
+    polygon_type poly;
+    for (const auto& point : points) {
+        bg::append(poly.outer(), point_type(point.x(), point.y()));
+    }
+    bg::correct(poly); // Ensure polygon is valid
+    return poly;
+}
+
+double utilities::calculateIoU(const vector<Eigen::Vector2d>& poly1Points, const vector<Eigen::Vector2d>& poly2Points) {
+    polygon_type poly1 = eigenToBoost(poly1Points);
+    polygon_type poly2 = eigenToBoost(poly2Points);
+
+    std::vector<polygon_type> output;
+    bg::intersection(poly1, poly2, output);
+
+    // If there's no intersection, IoU is 0
+    if (output.empty()) {
+        return 0.0;
+    }
+
+    // Calculate areas
+    double area1 = bg::area(poly1);
+    double area2 = bg::area(poly2);
+    double areaIntersection = 0.0;
+    for (const auto& poly : output) {
+        areaIntersection += bg::area(poly); 
+    }
+
+    // Calculate IoU
+    return areaIntersection / (area1 + area2 - areaIntersection);
+}
+
+double utilities::calculateIoT(const vector<Eigen::Vector2d>& poly1Points, const vector<Eigen::Vector2d>& poly2Points) {
+    polygon_type poly1 = eigenToBoost(poly1Points);
+    polygon_type poly2 = eigenToBoost(poly2Points);
+
+    std::vector<polygon_type> output;
+    bg::intersection(poly1, poly2, output);
+
+    // If there's no intersection, IoU is 0
+    if (output.empty()) {
+        return 0.0;
+    }
+
+    // Calculate areas
+    double area1 = bg::area(poly1);
+    double areaIntersection = 0.0;
+    for (const auto& poly : output) {
+        areaIntersection += bg::area(poly); 
+    }
+
+    // Calculate IoU
+    return areaIntersection / area1;
+}
+
+double utilities::calculateIoS(const vector<Eigen::Vector2d>& poly1Points, const vector<Eigen::Vector2d>& poly2Points) {
+    polygon_type poly1 = eigenToBoost(poly1Points);
+    polygon_type poly2 = eigenToBoost(poly2Points);
+
+    std::vector<polygon_type> output;
+    bg::intersection(poly1, poly2, output);
+
+    // If there's no intersection, IoU is 0
+    if (output.empty()) {
+        return 0.0;
+    }
+
+    // Calculate areas
+    double area1 = bg::area(poly1);
+    double area2 = bg::area(poly2);
+    double areaIntersection = 0.0;
+    for (const auto& poly : output) {
+        areaIntersection += bg::area(poly); 
+    }
+
+    double smallArea = min(area1, area2);
+
+    // Calculate IoU
+    return areaIntersection / smallArea;
 }

@@ -3,8 +3,19 @@
 #include <math.h>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point_xy.hpp>
+#include <boost/geometry/geometries/polygon.hpp>
+#include <boost/geometry/algorithms/intersection.hpp>
+#include <boost/geometry/algorithms/area.hpp>
 #include <boost/math/special_functions/gamma.hpp>
 #include <random>
+
+namespace bg = boost::geometry;
+namespace bgm = bg::model;
+
+typedef bgm::d2::point_xy<double> point_type;
+typedef bgm::polygon<point_type> polygon_type;
 
 class utilities{
     public:
@@ -38,4 +49,8 @@ class utilities{
                                  const double ratio,
                                  vector<Eigen::Vector2d>& polygon);
       static Eigen::MatrixXd sqrtm(const Eigen::MatrixXd& A);
+      static Eigen::MatrixXd eigen2Extent(const Eigen::VectorXd& eigenvalues, const Eigen::MatrixXd& eigenvectors);
+      static double calculateIoU(const vector<Eigen::Vector2d>& poly1Points, const vector<Eigen::Vector2d>& poly2Points);
+      static double calculateIoT(const vector<Eigen::Vector2d>& poly1Points, const vector<Eigen::Vector2d>& poly2Points);
+      static double calculateIoS(const vector<Eigen::Vector2d>& poly1Points, const vector<Eigen::Vector2d>& poly2Points);
 };

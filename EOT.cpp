@@ -53,77 +53,126 @@ void EOT::update_grid_label_(const uint32_t grid_index, const uint32_t label, st
   }
 }
 
-bool EOT::performPrediction(const double delta_time){
+bool EOT::performPrediction(const double delta_time,
+                            const vector<measurement>& measurements, 
+                            const vector<size_t>& promissing_new_t_idx,
+                            const vector<Eigen::Matrix2d>& p_n_t_eigenvectors,
+                            const vector<Eigen::Vector2d>& p_n_t_extents,
+                            const Eigen::Matrix4d& pose4Predict){
     if((m_currentParticlesKinematic_t_p_.size()==m_currentParticlesExtent_t_p_.size())
         &&(m_currentParticlesExtent_t_p_.size()==m_currentExistences_t_.size())){
-        for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
-            m_currentExistences_t_[t] *= m_param_.survivalProbability;
+        for(size_t t=0; t<m_currentAugmentedPOs_t_.size(); ++t){
+            Eigen::Vector4d prev_center(m_currentAugmentedPOs_t_[t].kinematic.p1, m_currentAugmentedPOs_t_[t].kinematic.p2, 0, 1);
+            Eigen::Vector4d curr_center = pose4Predict * prev_center;
+            m_currentAugmentedPOs_t_[t].kinematic.p1 = curr_center(0) + delta_time*m_currentAugmentedPOs_t_[t].kinematic.v1;
+            m_currentAugmentedPOs_t_[t].kinematic.p2 = curr_center(1) + delta_time*m_currentAugmentedPOs_t_[t].kinematic.v2;
+            // prediction with rotation
             double rot_ang = m_currentAugmentedPOs_t_[t].kinematic.t * delta_time;
             Eigen::Matrix2d rot_mat;
             rot_mat << cos(rot_ang), sin(rot_ang),
-                        -sin(rot_ang), cos(rot_ang);
-            Eigen::MatrixXd meanExtent = (rot_mat * m_currentAugmentedPOs_t_[t].extent.e * rot_mat.transpose());
+                       -sin(rot_ang), cos(rot_ang);
+            rot_mat = pose4Predict.block<2, 2>(0, 0) * rot_mat;
+            m_currentAugmentedPOs_t_[t].extent.e = rot_mat * m_currentAugmentedPOs_t_[t].extent.e * rot_mat.transpose();
+            m_currentAugmentedPOs_t_[t].extent.eigenvectors = rot_mat * m_currentAugmentedPOs_t_[t].extent.eigenvectors * rot_mat.transpose();
+        }
+        double sigmaRatio(1.0);
+        vector< vector<Eigen::Vector2d> > newPOPolygons;
+        for(size_t i=0; i<promissing_new_t_idx.size(); ++i){
+            vector<Eigen::Vector2d> tmpPolygon;
+            measurement tmpM = measurements[promissing_new_t_idx[i]];
+            po_kinematic tmpKine = {.p1=tmpM(0), .p2=tmpM(1), .v1=0, .v2=0, .t=0, .s=10};
+            utilities::extent2Polygon(tmpKine, p_n_t_extents[i], p_n_t_eigenvectors[i], sigmaRatio, tmpPolygon);
+            newPOPolygons.push_back(tmpPolygon);
+        }
+        vector< vector<Eigen::Vector2d> > currentPOPolygons;
+        for(size_t t=0; t<m_currentAugmentedPOs_t_.size(); ++t){
+            vector<Eigen::Vector2d> tmpPolygon;
+            utilities::extent2Polygon(m_currentAugmentedPOs_t_[t].kinematic, m_currentAugmentedPOs_t_[t].extent.eigenvalues, 
+                                    m_currentAugmentedPOs_t_[t].extent.eigenvectors, sigmaRatio, tmpPolygon);
+            currentPOPolygons.push_back(tmpPolygon);
+        }
+        double centerDeviation = sqrt(m_param_.measurementVariance)/5;
+        for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
+            m_currentExistences_t_[t] *= m_param_.survivalProbability;
+            Eigen::MatrixXd meanExtent = m_currentAugmentedPOs_t_[t].extent.e;
             Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
+            double match_iou_th(0.3);
+            bool found_match_new(false);
+            Eigen::MatrixXd ExtentShapeNew;
+            measurement centerNew;
+            double v1Deviation, v2Deviation;
+            for(size_t n=0; n<newPOPolygons.size(); ++n){
+                if(utilities::calculateIoU(currentPOPolygons[t], newPOPolygons[n])>match_iou_th){
+                    found_match_new = true;
+                    centerNew = measurements[promissing_new_t_idx[n]];
+                    Eigen::Vector2d tmpEigenvalues = p_n_t_extents[n];
+                    Eigen::Matrix2d tmpEigenvectors = p_n_t_eigenvectors[n];
+                    Eigen::MatrixXd meanExtent = utilities::eigen2Extent(tmpEigenvalues, tmpEigenvectors);
+                    ExtentShapeNew = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
+                    v1Deviation = (centerNew(0)-m_currentAugmentedPOs_t_[t].kinematic.p1)/delta_time;
+                    v2Deviation = (centerNew(1)-m_currentAugmentedPOs_t_[t].kinematic.p2)/delta_time;
+                    break;
+                }
+            }
             #pragma omp parallel for schedule(dynamic)
             for(size_t p=0; p<m_param_.numParticles; ++p){
-                if((m_currentLegacyParticlesFlags_t_[t]==true)&&(p%m_legacy_particles_mod_==0)){
-                    double tmp_dof = 0.6*m_param_.degreeFreedomPrediction;
-                    double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
-                    Eigen::Matrix2d tmp_rot_mat;
-                    tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
-                                -sin(tmp_rot_ang), cos(tmp_rot_ang);
-                    Eigen::MatrixXd tmp_meanExtent = (tmp_rot_mat * m_currentParticlesExtent_t_p_[t][p].e * tmp_rot_mat.transpose());
-                    Eigen::MatrixXd tmp_ExtentShape = tmp_meanExtent*(tmp_dof-meanExtent.cols()-1);
-                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(tmp_dof, tmp_ExtentShape);
-                }else if(p%3==0){
-                    double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
-                    Eigen::Matrix2d tmp_rot_mat;
-                    tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
-                                -sin(tmp_rot_ang), cos(tmp_rot_ang);
-                    Eigen::MatrixXd tmp_meanExtent = (tmp_rot_mat * m_currentParticlesExtent_t_p_[t][p].e * tmp_rot_mat.transpose());
-                    Eigen::MatrixXd tmp_ExtentShape = tmp_meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
-                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, tmp_ExtentShape);
+                double r1 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
+                double r2 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
+                if(found_match_new&&(p%2==0)){
+                    m_currentParticlesKinematic_t_p_[t][p].v1 += (utilities::sampleGaussian(0, v1Deviation) + delta_time*r1);
+                    m_currentParticlesKinematic_t_p_[t][p].v2 += (utilities::sampleGaussian(0, v2Deviation) + delta_time*r2);
+                    m_currentParticlesKinematic_t_p_[t][p].p1 = utilities::sampleGaussian(centerNew(0), centerDeviation);
+                    m_currentParticlesKinematic_t_p_[t][p].p2 = utilities::sampleGaussian(centerNew(1), centerDeviation);
+                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShapeNew);
                 }else{
-                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
+                    Eigen::Vector4d prev_center(m_currentParticlesKinematic_t_p_[t][p].p1, m_currentParticlesKinematic_t_p_[t][p].p2, 0, 1);
+                    Eigen::Vector4d curr_center = pose4Predict * prev_center;
+                    m_currentParticlesKinematic_t_p_[t][p].p1 = curr_center(0) + (m_currentParticlesKinematic_t_p_[t][p].v1*delta_time + 0.5*delta_time*delta_time*r1);
+                    m_currentParticlesKinematic_t_p_[t][p].p2 = curr_center(1) + (m_currentParticlesKinematic_t_p_[t][p].v2*delta_time + 0.5*delta_time*delta_time*r2);
+                    m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
+                    m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
+                    if((m_currentLegacyParticlesFlags_t_[t]==true)&&(p%m_legacy_particles_mod_==0)){
+                        double tmp_dof = 0.6*m_param_.degreeFreedomPrediction;
+                        double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
+                        Eigen::Matrix2d tmp_rot_mat;
+                        tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
+                                    -sin(tmp_rot_ang), cos(tmp_rot_ang);
+                        tmp_rot_mat = pose4Predict.block<2, 2>(0, 0) * tmp_rot_mat;
+                        Eigen::MatrixXd tmp_meanExtent = (tmp_rot_mat * m_currentParticlesExtent_t_p_[t][p].e * tmp_rot_mat.transpose());
+                        Eigen::MatrixXd tmp_ExtentShape = tmp_meanExtent*(tmp_dof-meanExtent.cols()-1);
+                        m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(tmp_dof, tmp_ExtentShape);
+                    }else if(p%3==0){
+                        double tmp_rot_ang = m_currentParticlesKinematic_t_p_[t][p].t * delta_time;
+                        Eigen::Matrix2d tmp_rot_mat;
+                        tmp_rot_mat << cos(tmp_rot_ang), sin(tmp_rot_ang),
+                                    -sin(tmp_rot_ang), cos(tmp_rot_ang);
+                        tmp_rot_mat = pose4Predict.block<2, 2>(0, 0) * tmp_rot_mat;
+                        Eigen::MatrixXd tmp_meanExtent = (tmp_rot_mat * m_currentParticlesExtent_t_p_[t][p].e * tmp_rot_mat.transpose());
+                        Eigen::MatrixXd tmp_ExtentShape = tmp_meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
+                        m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, tmp_ExtentShape);
+                    }else{
+                        m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShape);
+                    }
                 }
                 Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(m_currentParticlesExtent_t_p_[t][p].e);
                 m_currentParticlesExtent_t_p_[t][p].eigenvalues = eigensolver.eigenvalues();
                 m_currentParticlesExtent_t_p_[t][p].eigenvectors = eigensolver.eigenvectors();
-            }
-            #pragma omp parallel for
-            for(size_t p=0; p<m_param_.numParticles; ++p){
-                double r1 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
-                double r2 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
-                m_currentParticlesKinematic_t_p_[t][p].p1 += (m_currentParticlesKinematic_t_p_[t][p].v1*delta_time
-                                                             + 0.5*delta_time*delta_time*r1);
-                m_currentParticlesKinematic_t_p_[t][p].p2 += (m_currentParticlesKinematic_t_p_[t][p].v2*delta_time
-                                                             + 0.5*delta_time*delta_time*r2);
-                m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
-                m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
                 m_currentParticlesKinematic_t_p_[t][p].t += delta_time*utilities::sampleGaussian(0, m_param_.rotationalAccelerationDeviation);
             }
         }
         for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
-            m_currentPotentialObjects_t_[t].kinematic.p1 += delta_time*m_currentPotentialObjects_t_[t].kinematic.v1;
-            m_currentPotentialObjects_t_[t].kinematic.p2 += delta_time*m_currentPotentialObjects_t_[t].kinematic.v2;
+            Eigen::Vector4d prev_center(m_currentPotentialObjects_t_[t].kinematic.p1, m_currentPotentialObjects_t_[t].kinematic.p2, 0, 1);
+            Eigen::Vector4d curr_center = pose4Predict * prev_center;
+            m_currentPotentialObjects_t_[t].kinematic.p1 = curr_center(0) + delta_time*m_currentPotentialObjects_t_[t].kinematic.v1;
+            m_currentPotentialObjects_t_[t].kinematic.p2 = curr_center(1) + delta_time*m_currentPotentialObjects_t_[t].kinematic.v2;
             // prediction with rotation
             double rot_ang = m_currentPotentialObjects_t_[t].kinematic.t * delta_time;
             Eigen::Matrix2d rot_mat;
             rot_mat << cos(rot_ang), sin(rot_ang),
                        -sin(rot_ang), cos(rot_ang);
+            rot_mat = pose4Predict.block<2, 2>(0, 0) * rot_mat;
             m_currentPotentialObjects_t_[t].extent.e = rot_mat * m_currentPotentialObjects_t_[t].extent.e * rot_mat.transpose();
             m_currentPotentialObjects_t_[t].extent.eigenvectors = rot_mat * m_currentPotentialObjects_t_[t].extent.eigenvectors * rot_mat.transpose();
-        }
-        for(size_t t=0; t<m_currentAugmentedPOs_t_.size(); ++t){
-            m_currentAugmentedPOs_t_[t].kinematic.p1 += delta_time*m_currentAugmentedPOs_t_[t].kinematic.v1;
-            m_currentAugmentedPOs_t_[t].kinematic.p2 += delta_time*m_currentAugmentedPOs_t_[t].kinematic.v2;
-            // // prediction with rotation
-            // double rot_ang = m_currentAugmentedPOs_t_[t].kinematic.t * delta_time;
-            // Eigen::Matrix2d rot_mat;
-            // rot_mat << cos(rot_ang), sin(rot_ang),
-            //            -sin(rot_ang), cos(rot_ang);
-            // m_currentAugmentedPOs_t_[t].extent.e = rot_mat * m_currentAugmentedPOs_t_[t].extent.e * rot_mat.transpose();
-            // m_currentAugmentedPOs_t_[t].extent.eigenvectors = rot_mat * m_currentAugmentedPOs_t_[t].extent.eigenvectors * rot_mat.transpose();
         }
     }else{
         m_err_str_ = "[ERROR] performPrediction: legacy target numbers do not match " + to_string(m_currentParticlesKinematic_t_p_.size())
@@ -143,13 +192,21 @@ bool sizeCmp(pair<size_t, size_t> p1, pair<size_t, size_t> p2){
 
 bool EOT::getPromisingNewTargets(const vector<measurement>& measurements, 
                                  const vector<size_t>& promissing_new_t_idx,
+                                 const vector<Eigen::Matrix2d>& p_n_t_eigenvectors,
+                                 const vector<Eigen::Vector2d>& p_n_t_extents,
                                  vector<size_t>& newIndexes, 
+                                 vector<size_t>& selected_new_t_idx_idx, 
                                  vector<measurement>& ordered_measurements){
     
     if(m_currentPotentialObjects_t_.size()==0){
         ordered_measurements = measurements;
         newIndexes = promissing_new_t_idx;
+        for(size_t i=0; i<promissing_new_t_idx.size(); ++i){
+            selected_new_t_idx_idx.push_back(i);
+        }
     }else{
+        // ordered_measurements = measurements;
+
         double sigmaRatio(1.0);
         vector< vector<Eigen::Vector2d> > legacyPOPolygons;
         for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
@@ -158,31 +215,39 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
                                     m_currentPotentialObjects_t_[t].extent.eigenvectors, sigmaRatio, tmpPolygon);
             legacyPOPolygons.push_back(tmpPolygon);
         }
+        vector< vector<Eigen::Vector2d> > newPOPolygons;
+        for(size_t i=0; i<promissing_new_t_idx.size(); ++i){
+            vector<Eigen::Vector2d> tmpPolygon;
+            measurement tmpM = measurements[promissing_new_t_idx[i]];
+            po_kinematic tmpKine = {.p1=tmpM(0), .p2=tmpM(1), .v1=0, .v2=0, .t=0, .s=10};
+            utilities::extent2Polygon(tmpKine, p_n_t_extents[i], p_n_t_eigenvectors[i], sigmaRatio, tmpPolygon);
+            newPOPolygons.push_back(tmpPolygon);
+        }
         vector<size_t> rmedLegacyIndexes;
         size_t pre_idx(0);
+        double normalArea(4);
+        double iot_th(0.5);
+        double iou_th(0.1);
         for(size_t i=0; i<promissing_new_t_idx.size(); ++i){
-            measurement M = measurements[promissing_new_t_idx[i]];
-            bool is_in_any_legacy(false);
+            bool is_overlap_with_any_legacy(false);
             for(size_t t=0; t<m_currentPotentialObjects_t_.size(); ++t){
-                double radius = sigmaRatio*sqrt(std::pow(m_currentPotentialObjects_t_[t].extent.eigenvalues(1), 2) + std::pow(m_currentPotentialObjects_t_[t].extent.eigenvalues(0), 2));
-                if((M(0)<(m_currentPotentialObjects_t_[t].kinematic.p1-radius))||(M(0)>(m_currentPotentialObjects_t_[t].kinematic.p1+radius))
-                    ||(M(1)<(m_currentPotentialObjects_t_[t].kinematic.p2-radius))||(M(1)>(m_currentPotentialObjects_t_[t].kinematic.p2+radius))){
-                    continue;
-                }else{
-                    if(utilities::isInPolygon(legacyPOPolygons[t], M)){
-                        is_in_any_legacy = true;
-                        for(size_t j=pre_idx; j<=promissing_new_t_idx[i]; ++j){
-                            rmedLegacyIndexes.push_back(j);
-                        }
-                        break;
+                // if(((p_n_t_extents[i](0)*p_n_t_extents[i](1)<normalArea)&&(utilities::calculateIoT(newPOPolygons[i], legacyPOPolygons[t])>iot_th))
+                //     ||(utilities::calculateIoU(newPOPolygons[i], legacyPOPolygons[t])>iou_th)){
+                if((p_n_t_extents[i](0)*p_n_t_extents[i](1)<normalArea)
+                    ||(utilities::calculateIoU(newPOPolygons[i], legacyPOPolygons[t])>iou_th)){
+                    is_overlap_with_any_legacy = true;
+                    for(size_t j=pre_idx; j<=promissing_new_t_idx[i]; ++j){
+                        rmedLegacyIndexes.push_back(j);
                     }
+                    break;
                 }
             }
-            if(!is_in_any_legacy){
+            if(!is_overlap_with_any_legacy){
                 for(size_t j=pre_idx; j<=promissing_new_t_idx[i]; ++j){
                     ordered_measurements.push_back(measurements[j]);
                 }
                 newIndexes.push_back(ordered_measurements.size()-1);
+                selected_new_t_idx_idx.push_back(i);
             }
             pre_idx = promissing_new_t_idx[i]+1;
         }
@@ -197,7 +262,7 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
 void EOT::maskMeasurements4LegacyPOs(const vector<measurement>& measurements,
                                      vector< vector<size_t> >& mask_m_t,
                                      vector< vector<size_t> >& mask_t_m){
-    double radius = 4 * m_param_.meanTargetDimension;
+    double radius = 2 * m_param_.meanTargetDimension;
     size_t targetNum = m_currentAugmentedPOs_t_.size();
     size_t mNum = measurements.size();
     mask_m_t.resize(mNum);
@@ -424,9 +489,6 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
         for(size_t p=0; p<m_param_.numParticles; ++p) {
             squared_sum += tmpWeights_p[p]*tmpWeights_p[p];
         }
-        #if DEBUG
-            m_defaultLogger_->info("\ttarget: %v, N_eff: %v, Existences: %v", target, 1/squared_sum, m_currentExistences_t_[target]);
-        #endif
         if((is_legacy_target)&&(((1/squared_sum)>(double(m_param_.numParticles)/20))||(m_currentExistences_t_[target]<1))){
             m_currentLegacyParticlesFlags_t_[target] = true;
             #pragma omp parallel for schedule(dynamic)
@@ -463,6 +525,9 @@ void EOT::updateParticles(const vector< vector<double> >& logWeights_m_p,
 
 void EOT::eot_track(const vector<measurement>& ori_measurements, 
                     const vector<size_t>& promissing_new_t_idx,
+                    const vector<Eigen::Matrix2d>& p_n_t_eigenvectors,
+                    const vector<Eigen::Vector2d>& p_n_t_extents,
+                    const Eigen::Matrix4d& pose4Predict,
                     const grid_para& measurements_paras, 
                     const double delta_time, 
                     const uint64_t frame_idx, 
@@ -470,8 +535,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     timer_start();
     m_defaultLogger_->info("frame id: %v , EOT start.", frame_idx);
     // init configuration parameters
-    Eigen::Matrix2d totalCovariance = m_param_.meanPriorExtent*m_param_.meanPriorExtent;
-    totalCovariance.array() += m_param_.measurementVariance;
+    Eigen::Matrix2d totalCovariance = Eigen::Matrix2d::Identity() * m_param_.measurementVariance;
     double areaSize = (measurements_paras.dim1_max-measurements_paras.dim1_min)*(measurements_paras.dim2_max-measurements_paras.dim2_min);
     double uniformWeight = log(1/areaSize);
     Eigen::MatrixXd priorExtentShape = m_param_.meanPriorExtent*(m_param_.priorExtentDegreeFreedom-m_param_.meanPriorExtent.cols()-1);
@@ -485,7 +549,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     size_t numMeasurements = ori_measurements.size();
 
     // perform prediction step
-    if(!performPrediction(delta_time)){
+    if(!performPrediction(delta_time, ori_measurements, promissing_new_t_idx, p_n_t_eigenvectors, p_n_t_extents, pose4Predict)){
         m_defaultLogger_->error(m_err_str_);
         return;
     }
@@ -502,14 +566,15 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
 
     // get indexes of promising new objects
     vector<size_t> newIndexes; // store indexes in reverse order
+    vector<size_t> selected_new_t_idx_idx;
     vector<measurement> measurements;
-    getPromisingNewTargets(ori_measurements, promissing_new_t_idx, newIndexes, measurements);
+    getPromisingNewTargets(ori_measurements, promissing_new_t_idx, p_n_t_eigenvectors, p_n_t_extents, newIndexes, selected_new_t_idx_idx, measurements);
     vector< vector<size_t> > mask_m_t, mask_t_m;
     maskMeasurements4LegacyPOs(measurements, mask_m_t, mask_t_m);
     size_t numNew = newIndexes.size();
     unordered_map<size_t, bool> newIndexes_map;
     for(size_t i=0; i<numNew; ++i){
-        po_label label_n{frame_idx, newIndexes[i]};
+        po_label label_n{frame_idx, m_current_max_label_num_+i+1};
         m_currentLabels_t_.push_back(label_n);
         newIndexes_map[newIndexes[i]] = true;
     }
@@ -517,22 +582,29 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         m_defaultLogger_->info("newIndexes: %v : %v", newIndexes.size(), newIndexes);
     #endif
 
+    m_defaultLogger_->info("numLegacy: %v, numNew: %v", numLegacy, numNew);
+
     // initialize belief propagation (BP) message passing
     double init_new_existence = m_param_.meanBirths * exp_minus_meanMeasurements/(m_param_.meanBirths * exp_minus_meanMeasurements +1);
     vector< vector<double> > newWeights_t_p(numNew, vector<double>(m_param_.numParticles, 0.0));
     Eigen::Matrix2d proposalCovariance = 2 * totalCovariance;
     Eigen::Matrix2d proposalCovariance_sqrt = utilities::sqrtm(proposalCovariance);
-    for(size_t t=0; t<numNew; ++t){
+    for(int t=numNew-1; t>=0; --t){
         Eigen::Vector2d proposalMean = measurements[newIndexes[t]];
         vector<po_kinematic> kinematic_p(m_param_.numParticles);
         vector<po_extent> extent_p(m_param_.numParticles);
+        Eigen::Vector2d tmpEigenvalues = p_n_t_extents[selected_new_t_idx_idx[t]];
+        Eigen::Matrix2d tmpEigenvectors = p_n_t_eigenvectors[selected_new_t_idx_idx[t]];
+        Eigen::MatrixXd meanExtent = utilities::eigen2Extent(tmpEigenvalues, tmpEigenvectors);
+        Eigen::MatrixXd ExtentShape = meanExtent*(m_param_.priorExtentDegreeFreedom-meanExtent.cols()-1);
         #pragma omp parallel for schedule(dynamic)
         for(size_t p=0; p<m_param_.numParticles; ++p){
             Eigen::Vector2d posi = proposalMean + proposalCovariance_sqrt * Eigen::Vector2d(utilities::sampleGaussian(0, 1), utilities::sampleGaussian(0, 1));
             kinematic_p[p].p1 = posi(0);
             kinematic_p[p].p2 = posi(1);
             newWeights_t_p[t][p] = uniformWeight - log(utilities::mvnormPDF(posi, proposalMean, proposalCovariance));
-            extent_p[p].e = utilities::sampleInverseWishart(m_param_.priorExtentDegreeFreedom, priorExtentShape);
+            extent_p[p].e = utilities::sampleInverseWishart(m_param_.priorExtentDegreeFreedom, ExtentShape);
+            // extent_p[p].e = utilities::sampleInverseWishart(m_param_.priorExtentDegreeFreedom, priorExtentShape);
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(extent_p[p].e);
             extent_p[p].eigenvalues = eigensolver.eigenvalues();
             extent_p[p].eigenvectors = eigensolver.eigenvectors();
@@ -674,8 +746,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
 
         // perform update step for new targets
         int targetIndex = int(numLegacy) - 1;
-        for(auto& n_idx:newIndexes_map){
-            int t = n_idx.first;
+        for(int i=numNew-1; i>=0; --i){
+            int t = newIndexes[i];
             targetIndex = targetIndex + 1;
             vector< vector<double> > weights_m_p(numMeasurements+1, vector<double>(m_param_.numParticles, 0.0));
             #pragma omp parallel for
@@ -736,6 +808,8 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     #endif
 
     // perform estimation
+    vector<double> PO_out_Existences_t_;
+    vector<size_t> PO_out_index;
     m_currentPotentialObjects_t_.resize(0);
     m_currentAugmentedPOs_t_.resize(m_currentExistences_t_.size());
     m_currentMeanMeasurements_t_.resize(m_currentExistences_t_.size());
@@ -790,7 +864,46 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         if(m_currentExistences_t_[t] > m_param_.detectionThreshold){
             m_currentPotentialObjects_t_.push_back(tmpDetectedPO);
             potential_objects_out.push_back(tmpDetectedPO);
+            PO_out_Existences_t_.push_back(m_currentExistences_t_[t]);
+            PO_out_index.push_back(t);
         }
+    }
+
+    vector< vector<Eigen::Vector2d> > PO_out_Polygons;
+    for(size_t t=0; t<potential_objects_out.size(); ++t){
+        vector<Eigen::Vector2d> tmpPolygon;
+        utilities::extent2Polygon(potential_objects_out[t].kinematic, potential_objects_out[t].extent.eigenvalues, 
+                                potential_objects_out[t].extent.eigenvectors, 1, tmpPolygon);
+        PO_out_Polygons.push_back(tmpPolygon);
+    }
+    double IOS_removal_th(0.1);
+    double IOU_replace_th(0.9);
+    for(size_t t=0; t<potential_objects_out.size();){
+        bool need_removal(false);
+        for(size_t k=0; k<potential_objects_out.size(); ++k){
+            if((t!=k)&&(PO_out_Existences_t_[t]<PO_out_Existences_t_[k])&&(utilities::calculateIoS(PO_out_Polygons[t], PO_out_Polygons[k])>IOS_removal_th)){
+                // if(utilities::calculateIoU(PO_out_Polygons[t], PO_out_Polygons[k])>IOU_replace_th){
+                //     swap(m_currentPotentialObjects_t_[k].label.label_v, m_currentPotentialObjects_t_[t].label.label_v);
+                //     swap(potential_objects_out[k].label.label_v, potential_objects_out[t].label.label_v);
+                //     swap(m_currentLabels_t_[PO_out_index[k]].label_v, m_currentLabels_t_[PO_out_index[t]].label_v);
+                // }
+                need_removal = true;
+                break;
+            }
+        }
+        if(need_removal){
+            m_currentPotentialObjects_t_.erase(m_currentPotentialObjects_t_.begin()+t);
+            potential_objects_out.erase(potential_objects_out.begin()+t);
+            PO_out_Existences_t_.erase(PO_out_Existences_t_.begin()+t);
+            PO_out_Polygons.erase(PO_out_Polygons.begin()+t);
+            PO_out_index.erase(PO_out_index.begin()+t);
+        }else{
+            ++t;
+        }
+    }
+
+    for(size_t t=0; t<m_currentLabels_t_.size(); ++t){
+        m_current_max_label_num_ = max(m_current_max_label_num_, m_currentLabels_t_[t].label_v);
     }
 
     // TODO: Remove objects that are mainly within another larger object
