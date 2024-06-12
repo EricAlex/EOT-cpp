@@ -1,8 +1,4 @@
 #pragma once
-#include "globaldef.h"
-#include <math.h>
-#include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
@@ -10,6 +6,10 @@
 #include <boost/geometry/algorithms/area.hpp>
 #include <boost/math/special_functions/gamma.hpp>
 #include <random>
+#include <math.h>
+#include <Eigen/Eigenvalues>
+
+#include "globaldef.h"
 
 namespace bg = boost::geometry;
 namespace bgm = bg::model;

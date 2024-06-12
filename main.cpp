@@ -1,3 +1,8 @@
+#include "utilities.h"
+#include "globaldef.h"
+#include "EOT.h"
+#include "third_party/easylogging++.h"
+
 #include <iostream>
 #include <sstream>
 #include <unistd.h>
@@ -7,11 +12,6 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/visualization/pcl_visualizer.h>
-
-#include "globaldef.h"
-#include "utilities.h"
-#include "EOT.h"
-#include "third_party/easylogging++.h"
 
 INITIALIZE_EASYLOGGINGPP
 

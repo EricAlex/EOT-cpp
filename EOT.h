@@ -1,4 +1,9 @@
 #pragma once
+#include "utilities.h"
+#include "globaldef.h"
+#include "third_party/dbscan.h"
+#include "third_party/easylogging++.h"
+
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -12,11 +17,6 @@
 #include <numeric>
 #include <utility>
 #include "omp.h"
-
-#include "globaldef.h"
-#include "utilities.h"
-#include "third_party/dbscan.h"
-#include "third_party/easylogging++.h"
 
 #define DEBUG	false
 
