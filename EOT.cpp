@@ -1,7 +1,5 @@
 #include "EOT.h"
 
-#include <matplot/matplot.h>
-
 void EOT::update_grid_map_param(const grid_para& measurements_paras){
     m_grid_para_ = measurements_paras;
     m_grid_resolution_reciprocal_ = 1 / m_grid_para_.grid_res;
@@ -100,7 +98,6 @@ bool EOT::performPrediction(const double delta_time,
             bool found_match_new(false);
             Eigen::MatrixXd ExtentShapeNew;
             measurement centerNew;
-            double v1Deviation, v2Deviation;
             for(size_t n=0; n<newPOPolygons.size(); ++n){
                 if(utilities::calculateIoU(currentPOPolygons[t], newPOPolygons[n])>match_iou_th){
                     found_match_new = true;
@@ -109,8 +106,6 @@ bool EOT::performPrediction(const double delta_time,
                     Eigen::Matrix2d tmpEigenvectors = p_n_t_eigenvectors[n];
                     Eigen::MatrixXd meanExtent = utilities::eigen2Extent(tmpEigenvalues, tmpEigenvectors);
                     ExtentShapeNew = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
-                    v1Deviation = (centerNew(0)-m_currentAugmentedPOs_t_[t].kinematic.p1)/delta_time;
-                    v2Deviation = (centerNew(1)-m_currentAugmentedPOs_t_[t].kinematic.p2)/delta_time;
                     break;
                 }
             }
@@ -118,15 +113,19 @@ bool EOT::performPrediction(const double delta_time,
             for(size_t p=0; p<m_param_.numParticles; ++p){
                 double r1 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
                 double r2 = utilities::sampleGaussian(0, m_param_.accelerationDeviation);
+                Eigen::Vector4d prev_center(m_currentParticlesKinematic_t_p_[t][p].p1, m_currentParticlesKinematic_t_p_[t][p].p2, 0, 1);
+                Eigen::Vector4d curr_center = pose4Predict * prev_center;
                 if(found_match_new&&(p%2==0)){
-                    m_currentParticlesKinematic_t_p_[t][p].v1 += (utilities::sampleGaussian(0, v1Deviation) + delta_time*r1);
-                    m_currentParticlesKinematic_t_p_[t][p].v2 += (utilities::sampleGaussian(0, v2Deviation) + delta_time*r2);
                     m_currentParticlesKinematic_t_p_[t][p].p1 = utilities::sampleGaussian(centerNew(0), centerDeviation);
                     m_currentParticlesKinematic_t_p_[t][p].p2 = utilities::sampleGaussian(centerNew(1), centerDeviation);
+                    double v1Deviation = (m_currentParticlesKinematic_t_p_[t][p].p1-curr_center(0))/delta_time;
+                    double v2Deviation = (m_currentParticlesKinematic_t_p_[t][p].p2-curr_center(1))/delta_time;
+                    m_currentParticlesKinematic_t_p_[t][p].v1 = v1Deviation + delta_time*r1;
+                    m_currentParticlesKinematic_t_p_[t][p].v2 = v2Deviation + delta_time*r2;
+                    // m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
+                    // m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
                     m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShapeNew);
                 }else{
-                    Eigen::Vector4d prev_center(m_currentParticlesKinematic_t_p_[t][p].p1, m_currentParticlesKinematic_t_p_[t][p].p2, 0, 1);
-                    Eigen::Vector4d curr_center = pose4Predict * prev_center;
                     m_currentParticlesKinematic_t_p_[t][p].p1 = curr_center(0) + (m_currentParticlesKinematic_t_p_[t][p].v1*delta_time + 0.5*delta_time*delta_time*r1);
                     m_currentParticlesKinematic_t_p_[t][p].p2 = curr_center(1) + (m_currentParticlesKinematic_t_p_[t][p].v2*delta_time + 0.5*delta_time*delta_time*r2);
                     m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
