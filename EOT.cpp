@@ -196,7 +196,6 @@ bool EOT::getPromisingNewTargets(const vector<measurement>& measurements,
                                  vector<size_t>& newIndexes, 
                                  vector<size_t>& selected_new_t_idx_idx, 
                                  vector<measurement>& ordered_measurements){
-    
     if(m_currentPotentialObjects_t_.size()==0){
         ordered_measurements = measurements;
         newIndexes = promissing_new_t_idx;
