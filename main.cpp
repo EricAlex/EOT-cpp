@@ -50,7 +50,8 @@ vector<boost::filesystem::path> streamFile(string dataPath){
             paths_out.push_back(iter->string());
         }
 	}
-    sort(paths_out.begin(), paths_out.end(), FNcmp);
+    // sort(paths_out.begin(), paths_out.end(), FNcmp);
+    sort(paths_out.begin(), paths_out.end());
     return paths_out;
 }
 void loadData(const boost::filesystem::path& pcd_path, 
@@ -157,7 +158,7 @@ int main(int argc, char *argv[]){
             .priorTurningRateDeviation = M_PI/360,
             .meanTargetDimension = meanTargetDimension,
             .meanPriorExtent = meanTargetDimension * Eigen::Matrix2d::Identity(),
-            .priorExtentDegreeFreedom = 1000,
+            .priorExtentDegreeFreedom = 500,
             .degreeFreedomPrediction = 1000,
             .numParticles = 400,
             .ratioLegacyParticles = 0.2,
@@ -226,10 +227,10 @@ int main(int argc, char *argv[]){
                 vector<PO> potential_objects_out;
                 sim_eot.eot_track(Measurements, promissing_new_t_idx, p_n_t_eigenvectors, p_n_t_extents, pose4Predict, grid_parameters, scanTime, frame_idx, potential_objects_out);
 
-                string baseFilename = stramIterator->stem().string();
-                string outFilename = baseFilename + "_POs.bin";
-                fs::path outFilePath = outFolderPath / outFilename;
-                writePOsToBinary(outFilePath, potential_objects_out);
+                // string baseFilename = stramIterator->stem().string();
+                // string outFilename = baseFilename + "_POs.bin";
+                // fs::path outFilePath = outFolderPath / outFilename;
+                // writePOsToBinary(outFilePath, potential_objects_out);
                 
                 pcl::PointCloud<pcl::PointXYZ>::Ptr show_cloud_M(new pcl::PointCloud<pcl::PointXYZ>);
                 double step(0.1);
@@ -301,6 +302,14 @@ int main(int argc, char *argv[]){
                 //         }
                 //     }
                 // }
+
+                string baseFilename = stramIterator->stem().string();
+                string outFilename = baseFilename + "_POs.bin";
+                fs::path outFilePath = outFolderPath / outFilename;
+                writePOsToBinary(outFilePath, potential_objects_out);
+
+                cout<<"\r"<<stramIterator - stream.begin() + 1<<"/"<<stream.size()<<" ";
+                cout.flush();
 
                 pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> single_color_cloud_M(show_cloud_M, 0, 0, 255);
                 viewer->addPointCloud<pcl::PointXYZ>(show_cloud_M, single_color_cloud_M, "cloud_M");

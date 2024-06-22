@@ -105,7 +105,7 @@ bool EOT::performPrediction(const double delta_time,
                     Eigen::Vector2d tmpEigenvalues = p_n_t_extents[n];
                     Eigen::Matrix2d tmpEigenvectors = p_n_t_eigenvectors[n];
                     Eigen::MatrixXd meanExtent = utilities::eigen2Extent(tmpEigenvalues, tmpEigenvectors);
-                    ExtentShapeNew = meanExtent*(m_param_.degreeFreedomPrediction-meanExtent.cols()-1);
+                    ExtentShapeNew = meanExtent*(m_param_.priorExtentDegreeFreedom-meanExtent.cols()-1);
                     break;
                 }
             }
@@ -124,7 +124,7 @@ bool EOT::performPrediction(const double delta_time,
                     m_currentParticlesKinematic_t_p_[t][p].v2 = v2Deviation + delta_time*r2;
                     // m_currentParticlesKinematic_t_p_[t][p].v1 += delta_time*r1;
                     // m_currentParticlesKinematic_t_p_[t][p].v2 += delta_time*r2;
-                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.degreeFreedomPrediction, ExtentShapeNew);
+                    m_currentParticlesExtent_t_p_[t][p].e = utilities::sampleInverseWishart(m_param_.priorExtentDegreeFreedom, ExtentShapeNew);
                 }else{
                     m_currentParticlesKinematic_t_p_[t][p].p1 = curr_center(0) + (m_currentParticlesKinematic_t_p_[t][p].v1*delta_time + 0.5*delta_time*delta_time*r1);
                     m_currentParticlesKinematic_t_p_[t][p].p2 = curr_center(1) + (m_currentParticlesKinematic_t_p_[t][p].v2*delta_time + 0.5*delta_time*delta_time*r2);
@@ -814,6 +814,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
     for(size_t t=0; t<m_currentExistences_t_.size(); ++t){
         PO tmpDetectedPO;
         tmpDetectedPO.label = m_currentLabels_t_[t];
+        tmpDetectedPO.label.frame_idx = frame_idx;
         double sum_p1(0), sum_p2(0), sum_v1(0), sum_v2(0), sum_t(0);
         double sum_e0(0), sum_e1(0), sum_e2(0), sum_e3(0);
         size_t particle_c(0);
@@ -857,6 +858,7 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(tmpDetectedPO.extent.e);
         tmpDetectedPO.extent.eigenvalues = eigensolver.eigenvalues();
         tmpDetectedPO.extent.eigenvectors = eigensolver.eigenvectors();
+        tmpDetectedPO.existence = m_currentExistences_t_[t];
         m_currentMeanMeasurements_t_[t] = utilities::mean_number_of_measurements(tmpDetectedPO.extent.eigenvalues, m_grid_para_.grid_res);
         m_currentAugmentedPOs_t_[t] = tmpDetectedPO;
         if(m_currentExistences_t_[t] > m_param_.detectionThreshold){
@@ -874,19 +876,23 @@ void EOT::eot_track(const vector<measurement>& ori_measurements,
                                 potential_objects_out[t].extent.eigenvectors, 1, tmpPolygon);
         PO_out_Polygons.push_back(tmpPolygon);
     }
-    double IOS_removal_th(0.1);
+    double IOS_removal_th(0.6);
     double IOU_replace_th(0.9);
     for(size_t t=0; t<potential_objects_out.size();){
         bool need_removal(false);
         for(size_t k=0; k<potential_objects_out.size(); ++k){
-            if((t!=k)&&(PO_out_Existences_t_[t]<PO_out_Existences_t_[k])&&(utilities::calculateIoS(PO_out_Polygons[t], PO_out_Polygons[k])>IOS_removal_th)){
+            if((t!=k)&&(utilities::calculateIoS(PO_out_Polygons[t], PO_out_Polygons[k])>IOS_removal_th)){
                 // if(utilities::calculateIoU(PO_out_Polygons[t], PO_out_Polygons[k])>IOU_replace_th){
                 //     swap(m_currentPotentialObjects_t_[k].label.label_v, m_currentPotentialObjects_t_[t].label.label_v);
                 //     swap(potential_objects_out[k].label.label_v, potential_objects_out[t].label.label_v);
                 //     swap(m_currentLabels_t_[PO_out_index[k]].label_v, m_currentLabels_t_[PO_out_index[t]].label_v);
                 // }
-                need_removal = true;
-                break;
+                double area_t_ = potential_objects_out[t].extent.eigenvalues(0)*potential_objects_out[t].extent.eigenvalues(1);
+                double area_k_ = potential_objects_out[k].extent.eigenvalues(0)*potential_objects_out[k].extent.eigenvalues(1);
+                if(area_t_>area_k_){
+                    need_removal = true;
+                    break;
+                }
             }
         }
         if(need_removal){

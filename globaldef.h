@@ -37,6 +37,7 @@ struct PO{
 	po_kinematic kinematic;
 	po_extent extent;
 	po_label label;
+	double existence;
 };
 
 typedef Eigen::Vector2d measurement;
